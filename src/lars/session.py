@@ -2,7 +2,7 @@ import os
 import threading
 
 from lars import store
-from lars.evolve import propose_replacement, should_retire
+from lars.evolve import propose_level, should_propose, should_retire
 from lars.factored import FactoredBandit
 from lars.measure import measure
 from lars.prefetch import Prefetcher
@@ -22,6 +22,7 @@ MOOD = [
     "calm and matter-of-fact",
 ]
 EVOLVING = ["style"]
+MAX_RETRIES = 5  # regenerate a duplicate tweet at most this many times, then show it anyway
 
 
 class Session:
@@ -37,18 +38,24 @@ class Session:
             self.bandit, self.log, self.retired = FactoredBandit(dims), [], {d: [] for d in dims}
         self.prefetch = Prefetcher(self.bandit, TOPIC, AUDIENCE, MAX_CONCURRENT)
         self.pending: dict[int, tuple[dict[str, str], str]] = {}
+        self.seen = {e["tweet"] for e in self.log}  # every tweet ever shown
         self.next_id = 0
         self.lock = threading.Lock()
 
     def next(self) -> tuple[int, str]:
-        """Return (id, tweet). Blocks only if the queued tweet is still generating."""
-        with self.lock:
-            levels, future = self.prefetch.take()
-            tid, self.next_id = self.next_id, self.next_id + 1
-        tweet = future.result()
-        with self.lock:
-            self.pending[tid] = (levels, tweet)
-        return tid, tweet
+        """Return (id, tweet), skipping exact duplicates of any tweet already shown.
+        Blocks only if the queued tweet is still generating."""
+        for attempt in range(MAX_RETRIES + 1):
+            with self.lock:
+                levels, future = self.prefetch.take()
+            tweet = future.result()
+            with self.lock:
+                if tweet in self.seen and attempt < MAX_RETRIES:
+                    continue
+                self.seen.add(tweet)
+                tid, self.next_id = self.next_id, self.next_id + 1
+                self.pending[tid] = (levels, tweet)
+                return tid, tweet
 
     def rate(self, tid: int, reward: int) -> None:
         with self.lock:
@@ -62,10 +69,12 @@ class Session:
                 b = self.bandit.dims[dim]
                 dead = should_retire(b)
                 if dead is not None:
-                    new = propose_replacement(b, dim, dead, self.log, self.retired[dim], TOPIC, AUDIENCE)
+                    new = propose_level(b, dim, self.log, self.retired[dim], TOPIC, AUDIENCE, dead)
                     self.retired[dim].append(b.arms[dead])
                     b.replace(dead, new)
                     self.prefetch.refill()  # queued tweets may use the retired level
+                if should_propose(b, len(self.log)):
+                    b.add(propose_level(b, dim, self.log, self.retired[dim], TOPIC, AUDIENCE))
             store.save(self.bandit, self.log, self.retired)
 
     def info(self) -> str:

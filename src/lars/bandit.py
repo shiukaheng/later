@@ -25,6 +25,11 @@ class ThompsonBandit:
         self.alpha[arm] += reward
         self.beta[arm] += 1 - reward
 
+    def add(self, arm: str) -> None:
+        self.arms.append(arm)
+        self.alpha = np.append(self.alpha, 1.0)
+        self.beta = np.append(self.beta, 1.0)
+
     def replace(self, arm: int, strategy: str) -> None:
         self.arms[arm] = strategy
         self.alpha[arm] = self.beta[arm] = 1
