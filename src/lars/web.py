@@ -35,8 +35,10 @@ def main() -> None:
             if self.command == "GET" and self.path == "/":
                 self.send(PAGE, "text/html; charset=utf-8")
             elif self.command == "GET" and self.path == "/next":
-                tid, tweet = session.next()
-                self.send(json.dumps({"id": tid, "text": tweet}).encode())
+                post = session.next()
+                a = post["author"]
+                author = {"id": a["id"], "name": a["name"], "handle": a["handle"], "avatar": a["avatar"]}
+                self.send(json.dumps({**post, "author": author}).encode())
             elif self.command == "GET" and self.path == "/info":
                 self.send(session.info().encode(), "text/plain; charset=utf-8")
             elif self.command == "POST" and self.path == "/rate":

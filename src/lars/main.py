@@ -8,8 +8,9 @@ def main() -> None:
     session = Session()
     try:
         while True:
-            tid, tweet = session.next()
-            session.rate(tid, rate(tweet, lambda: print(session.info())))
+            post = session.next()
+            a = post["author"]
+            session.rate(post["id"], rate(f"{a['name']} @{a['handle']}\n{post['text']}", lambda: print(session.info())))
     except (KeyboardInterrupt, EOFError):
         pass
     finally:

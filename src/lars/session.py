@@ -4,7 +4,9 @@ import threading
 import time
 
 from lars import store
+from lars.authors import AuthorPool
 from lars.bandit import ThompsonBandit
+from lars.engagement import engagement
 from lars.evolve import PROPOSE_EVERY, propose_level, should_propose, should_retire
 from lars.factored import FactoredBandit
 from lars.measure import measure
@@ -59,7 +61,8 @@ class Session:
             self.bandit, self.log, self.retired = FactoredBandit(dims), [], {d: [] for d in dims}
         log.info("session ready: %d ratings so far, %d-way prefetch", len(self.log), MAX_CONCURRENT)
         self.prefetch = Prefetcher(self.bandit, FEED, MAX_CONCURRENT)
-        self.pending: dict[int, tuple[dict[str, str], str]] = {}
+        self.authors = AuthorPool()
+        self.pending: dict[int, tuple[dict[str, str], dict]] = {}
         self.seen = {e["tweet"] for e in self.log}  # every tweet ever shown
         self.next_id = 0
         self.lock = threading.Lock()
@@ -77,9 +80,9 @@ class Session:
             self.retired[name] = []
             log.info("added dimension '%s'", name)
 
-    def next(self) -> tuple[int, str]:
-        """Return (id, tweet), skipping exact duplicates of any tweet already shown.
-        Blocks only if the queued tweet is still generating."""
+    def next(self) -> dict:
+        """Return the next post {id, text, author, stats}, skipping exact duplicates of any
+        tweet already shown. Blocks only if the queued tweet is still generating."""
         start = time.monotonic()
         for attempt in range(MAX_RETRIES + 1):
             with self.lock:
@@ -95,9 +98,12 @@ class Session:
                     continue
                 self.seen.add(tweet)
                 tid, self.next_id = self.next_id, self.next_id + 1
-                self.pending[tid] = (levels, tweet)
+            author, stats = self.authors.take(), engagement()
+            post = {"id": tid, "text": tweet, "author": author, "stats": stats}
+            with self.lock:
+                self.pending[tid] = (levels, post)
             log.info("served #%d after %.2fs (%d on screen unrated)", tid, time.monotonic() - start, len(self.pending))
-            return tid, tweet
+            return post
         raise RuntimeError(f"no tweet after {MAX_RETRIES + 1} attempts")
 
     def rate(self, tid: int, reward: int) -> None:
@@ -105,9 +111,13 @@ class Session:
             if tid not in self.pending:
                 log.warning("rating for unknown tweet #%d ignored", tid)
                 return
-            levels, tweet = self.pending.pop(tid)
+            levels, post = self.pending.pop(tid)
+            tweet = post["text"]
             self.bandit.update(levels, reward)
-            self.log.append({"levels": levels, "tweet": tweet, "reward": reward, **measure(tweet)})
+            self.log.append({
+                "levels": levels, "tweet": tweet, "reward": reward, **measure(tweet),
+                "author": post["author"]["id"], "shown": post["stats"],
+            })
             likes = sum(e["reward"] for e in self.log)
             log.info("rated #%d %s (%d ratings, %d likes)", tid, "LIKE" if reward else "skip", len(self.log), likes)
 
