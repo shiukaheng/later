@@ -5,6 +5,16 @@ import numpy as np
 # Exploration: >1 inflates posteriors (acts as if we had 1/EXPLORE as much data),
 # so weaker arms get tried more often. 1 = standard Thompson sampling.
 EXPLORE = float(os.environ.get("LARS_EXPLORE", 1.0))
+# Evidence halves after roughly 138 ratings at the default rate.
+DISCOUNT = float(os.environ.get("LARS_DISCOUNT", 0.995))
+if not 0 < DISCOUNT <= 1:
+    raise ValueError("LARS_DISCOUNT must be greater than 0 and at most 1")
+
+
+def same(a: str, b: str) -> bool:
+    """Levels that differ only in case, spacing or punctuation are the same level."""
+    norm = lambda s: " ".join("".join(c for c in s.lower() if c.isalnum() or c.isspace()).split())
+    return norm(a) == norm(b)
 
 
 class ThompsonBandit:
@@ -25,14 +35,37 @@ class ThompsonBandit:
         self.alpha[arm] += reward
         self.beta[arm] += 1 - reward
 
-    def add(self, arm: str) -> None:
+    def discount(self) -> None:
+        """Age all evidence, preserving each arm's Beta(1, 1) prior."""
+        self.alpha = 1 + DISCOUNT * (self.alpha - 1)
+        self.beta = 1 + DISCOUNT * (self.beta - 1)
+
+    def add(self, arm: str) -> bool:
+        """Add a new arm with a fresh prior. Refuses duplicates: a copy of an existing arm
+        would never be credited (ratings match by text) yet keep getting picked."""
+        if any(same(arm, a) for a in self.arms):
+            return False
         self.arms.append(arm)
         self.alpha = np.append(self.alpha, 1.0)
         self.beta = np.append(self.beta, 1.0)
+        return True
 
-    def replace(self, arm: int, strategy: str) -> None:
-        self.arms[arm] = strategy
-        self.alpha[arm] = self.beta[arm] = 1
+    def remove(self, arm: int) -> None:
+        del self.arms[arm]
+        self.alpha = np.delete(self.alpha, arm)
+        self.beta = np.delete(self.beta, arm)
+
+    def dedupe(self) -> int:
+        """Merge duplicate arms into their first copy (summing ratings). Returns # merged."""
+        merged = 0
+        for i in range(len(self.arms) - 1, 0, -1):
+            first = next(j for j in range(i + 1) if same(self.arms[j], self.arms[i]))
+            if first != i:
+                self.alpha[first] += self.alpha[i] - 1
+                self.beta[first] += self.beta[i] - 1
+                self.remove(i)
+                merged += 1
+        return merged
 
     def means(self) -> np.ndarray:
         return self.alpha / (self.alpha + self.beta)

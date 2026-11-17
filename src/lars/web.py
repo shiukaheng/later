@@ -5,7 +5,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from lars import store
+from lars.arguments import parse_args
 from lars.session import Session
 
 PORT = int(os.environ.get("LARS_PORT", 8000))
@@ -15,6 +15,7 @@ log = logging.getLogger("lars.web")
 
 def main() -> None:
     """Browser feed. Same backend (Session) as the terminal version."""
+    args = parse_args("Browser feed", web=True)
     logging.basicConfig(
         level=os.environ.get("LARS_LOG", "INFO"),
         format="%(asctime)s %(levelname)-7s %(name)-9s %(message)s",
@@ -22,7 +23,7 @@ def main() -> None:
     )
     for name in ("httpx", "httpx2"):  # OpenAI SDK per-request logs
         logging.getLogger(name).setLevel(logging.WARNING)
-    session = Session()
+    session = Session(profile=args.profile)
 
     class Handler(BaseHTTPRequestHandler):
         def send(self, body: bytes, ctype: str = "application/json", code: int = 200) -> None:
@@ -63,8 +64,8 @@ def main() -> None:
         def log_message(self, *args):  # replaced by our own logging above
             pass
 
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    log.info("LARS feed on http://localhost:%d  (Ctrl-C to stop)", PORT)
+    server = ThreadingHTTPServer((args.host, PORT), Handler)
+    log.info("LARS profile %s listening on %s:%d  (Ctrl-C to stop)", args.profile, args.host, PORT)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -72,4 +73,4 @@ def main() -> None:
     finally:
         server.server_close()
         session.close()
-        print(f"\nsaved {len(session.log)} ratings to {store.PATH}")
+        print(f"\nsaved {len(session.log)} ratings to {session.path}")

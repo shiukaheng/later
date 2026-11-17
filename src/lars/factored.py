@@ -15,7 +15,9 @@ class FactoredBandit:
         return {name: self.dims[name].arms[i] for name, i in choice.items()}
 
     def update(self, levels: dict[str, str], reward: int) -> None:
-        """Credit by level text, so a level retired since the tweet was made is skipped."""
+        """Age all evidence, then credit levels still active when the tweet is rated."""
+        for b in self.dims.values():
+            b.discount()
         for name, level in levels.items():
             b = self.dims[name]
             if level in b.arms:

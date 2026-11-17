@@ -1,10 +1,13 @@
+import logging
 import os
 
 import numpy as np
 from pydantic import BaseModel
 
-from lars.bandit import ThompsonBandit
-from lars.llm import ask
+from lars.bandit import ThompsonBandit, same
+from lars.llm import NewsTool, ask
+
+logger = logging.getLogger("lars")
 
 # Retire a level if P(worse than the best tested level) > THRESHOLD and it has >= MIN_N
 # ratings. Simulated trade-off, per dimension of 6 levels over 300 ratings at a 30% like rate:
@@ -53,10 +56,12 @@ def propose_level(
     retired: list[str],
     feed: str,
     dead: int | None = None,
-) -> str:
+    attempts: int = 3,
+    stories: list[dict] | None = None,
+) -> str | None:
     """Ask the LLM for one new level of `dim`, conditioned on the existing levels,
     their like rates, example tweets, and everything retired. If `dead` is given,
-    the new level replaces that one."""
+    the new level replaces that one. Returns None if it only ever repeats known levels."""
     b_i = tested_best(bandit)
     best = bandit.arms[b_i if b_i is not None else int(np.argmax(bandit.means()))]
 
@@ -65,7 +70,7 @@ def propose_level(
         return "\n".join(f"- {t}" for t in hits[-EXAMPLES:]) or "- (none)"
 
     stats = "\n".join(
-        f"- {s} (like rate {m:.2f}, n={int(a + b - 2)})"
+        f"- {s} (like rate {m:.2f}, effective n={a + b - 2:.1f})"
         for s, m, a, b in zip(bandit.arms, bandit.means(), bandit.alpha, bandit.beta)
     )
     excluded = retired + ([bandit.arms[dead]] if dead is not None else [])
@@ -84,7 +89,17 @@ def propose_level(
     if excluded:
         parts.append("Previously retired (do not repeat):\n" + "\n".join(f"- {s}" for s in excluded))
     parts.append(
-        f"Propose ONE new {dim}, clearly distinct from all of the above, that the user is "
-        f"likely to like given what has worked. One short sentence. Only describe the {dim}."
+        f"Propose ONE new {dim}, clearly distinct from all of the above (not a copy or rewording "
+        f"of any listed option), that the user is likely to like given what has worked. It must "
+        f"be achievable in a plain-text tweet of at most 280 characters: no markdown, bold or "
+        f"other rich formatting. One short sentence. Only describe the {dim}."
     )
-    return ask("\n\n".join(parts), Level).level
+    known = bandit.arms + excluded
+    for _ in range(attempts):
+        news = NewsTool(stories) if stories else None
+        level = (ask("\n\n".join(parts), Level, news=news) if news else ask("\n\n".join(parts), Level)).level.strip()
+        if level and any(c.isalnum() for c in level) and not any(same(level, k) for k in known):
+            return level
+        logger.info("LLM proposed an empty or existing %s level, retrying", dim)
+        parts.append(f"The previous proposal {level!r} was invalid or already known. Propose a different option.")
+    return None
