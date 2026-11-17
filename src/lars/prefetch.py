@@ -1,5 +1,5 @@
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 
 from lars.factored import FactoredBandit
 from lars.generator import generate_tweet
@@ -16,19 +16,19 @@ class Prefetcher:
         self.queue = deque()
         self.refill()
 
-    def _submit(self):
-        choice = self.bandit.select()
-        levels = self.bandit.levels(choice)
-        return choice, levels, self.pool.submit(generate_tweet, levels, self.topic, self.audience)
+    def _submit(self) -> tuple[dict[str, str], Future]:
+        levels = self.bandit.levels(self.bandit.select())
+        return levels, self.pool.submit(generate_tweet, levels, self.topic, self.audience)
 
-    def take(self) -> tuple[dict[str, int], dict[str, str], str]:
-        choice, levels, future = self.queue.popleft()
+    def take(self) -> tuple[dict[str, str], Future]:
+        """Pop the next (levels, future-tweet) and queue a replacement. Non-blocking."""
+        item = self.queue.popleft()
         self.queue.append(self._submit())
-        return choice, levels, future.result()
+        return item
 
     def refill(self) -> None:
         """Discard queued tweets (e.g. after a level was replaced) and start over."""
-        for *_, future in self.queue:
+        for _, future in self.queue:
             future.cancel()
         self.queue = deque(self._submit() for _ in range(self.size))
 

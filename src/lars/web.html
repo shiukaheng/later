@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home / LARS</title>
+<style>
+  body { margin: 0; font-family: -apple-system, system-ui, sans-serif; background: #fff; color: #0f1419; }
+  #feed { max-width: 600px; margin: 0 auto; border-left: 1px solid #eff3f4; border-right: 1px solid #eff3f4; min-height: 100vh; }
+  header { position: sticky; top: 0; background: rgba(255,255,255,.85); backdrop-filter: blur(8px);
+           padding: 16px; font-weight: 700; font-size: 20px; border-bottom: 1px solid #eff3f4; }
+  .tweet { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #eff3f4; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: #1d9bf0; flex: none; }
+  .name { font-weight: 700; } .handle { color: #536471; }
+  .text { white-space: pre-wrap; margin: 2px 0 10px; line-height: 1.35; }
+  .like { background: none; border: 0; padding: 0; cursor: pointer; color: #536471; font-size: 15px; }
+  .like.on { color: #f91880; }
+  .like:disabled { cursor: default; }
+  #more { padding: 24px; text-align: center; color: #536471; }
+  #info { display: none; position: fixed; inset: 20px; background: #000d; color: #fff; padding: 16px;
+          overflow: auto; font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; border-radius: 12px; }
+</style>
+</head>
+<body>
+<div id="feed">
+  <header>For you</header>
+  <div id="tweets"></div>
+  <div id="more">Loading…</div>
+</div>
+<pre id="info"></pre>
+<script>
+const tweets = document.getElementById("tweets");
+const more = document.getElementById("more");
+const info = document.getElementById("info");
+
+// A tweet is rated once it scrolls off the top: liked = 1, otherwise 0.
+const seen = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    const el = e.target;
+    if (!e.isIntersecting && e.boundingClientRect.bottom < 0 && !el.dataset.rated) {
+      el.dataset.rated = "1";
+      el.querySelector(".like").disabled = true;
+      fetch("/rate", { method: "POST", body: JSON.stringify({ id: +el.dataset.id, reward: +!!el.dataset.liked }) });
+      seen.unobserve(el);
+    }
+  }
+});
+
+function render({ id, text }) {
+  const el = document.createElement("article");
+  el.className = "tweet";
+  el.dataset.id = id;
+  el.innerHTML = `<div class="avatar"></div><div>
+    <div><span class="name">LARS</span> <span class="handle">@lars</span></div>
+    <div class="text"></div>
+    <button class="like">♡ Like</button></div>`;
+  el.querySelector(".text").textContent = text;
+  const like = el.querySelector(".like");
+  like.onclick = () => {
+    el.dataset.liked = el.dataset.liked ? "" : "1";
+    like.classList.toggle("on", !!el.dataset.liked);
+    like.textContent = el.dataset.liked ? "♥ Liked" : "♡ Like";
+  };
+  tweets.append(el);
+  seen.observe(el);
+}
+
+// Infinite scroll: load one tweet at a time while the bottom is near.
+let loading = false, nearBottom = true;
+async function load() {
+  if (loading) return;
+  loading = true;
+  while (nearBottom) render(await (await fetch("/next")).json());
+  loading = false;
+}
+new IntersectionObserver(([e]) => { nearBottom = e.isIntersecting; load(); }, { rootMargin: "800px" }).observe(more);
+
+// Hidden: press "i" to show/hide experiment info.
+addEventListener("keydown", async e => {
+  if (e.key !== "i") return;
+  if (info.style.display === "block") return (info.style.display = "none");
+  info.textContent = await (await fetch("/info")).text();
+  info.style.display = "block";
+});
+</script>
+</body>
+</html>
