@@ -13,8 +13,14 @@ AUDIENCE = "beginner programmers"
 MAX_CONCURRENT = int(os.environ.get("LARS_MAX_CONCURRENT", 3))
 
 # Fixed dimensions. "style" levels are proposed by the LLM and evolve (EVOLVING).
-LENGTH = ["short: under 100 characters", "medium: 100-200 characters", "long: 200-280 characters"]
+LENGTH = ["tiny: under 50 characters", "short: 50-100 characters", "medium: 100-160 characters"]
 EMOJI = ["no emojis at all", "one or two emojis", "lots of emojis (5 or more)"]
+MOOD = [
+    "happy and upbeat",
+    "ragebait: a provocative take designed to make people argue",
+    "rant: frustrated and venting",
+    "calm and matter-of-fact",
+]
 EVOLVING = ["style"]
 
 
@@ -38,7 +44,7 @@ def main() -> None:
     if loaded:
         bandit, log, retired = loaded
     else:
-        dims = {"style": propose_strategies(TOPIC, AUDIENCE), "length": LENGTH, "emoji": EMOJI}
+        dims = {"style": propose_strategies(TOPIC, AUDIENCE), "length": LENGTH, "emoji": EMOJI, "mood": MOOD}
         bandit, log, retired = FactoredBandit(dims), [], {d: [] for d in dims}
     prefetch = Prefetcher(bandit, TOPIC, AUDIENCE, MAX_CONCURRENT)
 
