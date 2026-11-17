@@ -1,28 +1,36 @@
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
+from lars.factored import FactoredBandit
 from lars.generator import generate_tweet
 
 
 class Prefetcher:
-    """Keeps one ready tweet per arm, generated in the background."""
+    """Keeps a queue of tweets generating in the background. Each queued tweet's
+    levels are chosen by Thompson sampling at submit time (a few ratings stale)."""
 
-    def __init__(self, arms: list[str], topic: str, audience: str, max_workers: int = 3):
-        self.arms, self.topic, self.audience = list(arms), topic, audience
+    def __init__(self, bandit: FactoredBandit, topic: str, audience: str, max_workers: int = 3):
+        self.bandit, self.topic, self.audience = bandit, topic, audience
         self.pool = ThreadPoolExecutor(max_workers=max_workers)
-        self.ready = [self._submit(i) for i in range(len(arms))]
+        self.size = max_workers
+        self.queue = deque()
+        self.refill()
 
-    def _submit(self, arm: int):
-        return self.pool.submit(generate_tweet, self.arms[arm], self.topic, self.audience)
+    def _submit(self):
+        choice = self.bandit.select()
+        levels = self.bandit.levels(choice)
+        return choice, levels, self.pool.submit(generate_tweet, levels, self.topic, self.audience)
 
-    def take(self, arm: int) -> str:
-        tweet = self.ready[arm].result()
-        self.ready[arm] = self._submit(arm)
-        return tweet
+    def take(self) -> tuple[dict[str, int], dict[str, str], str]:
+        choice, levels, future = self.queue.popleft()
+        self.queue.append(self._submit())
+        return choice, levels, future.result()
 
-    def replace(self, arm: int, strategy: str) -> None:
-        self.ready[arm].cancel()
-        self.arms[arm] = strategy
-        self.ready[arm] = self._submit(arm)
+    def refill(self) -> None:
+        """Discard queued tweets (e.g. after a level was replaced) and start over."""
+        for *_, future in self.queue:
+            future.cancel()
+        self.queue = deque(self._submit() for _ in range(self.size))
 
     def close(self) -> None:
         self.pool.shutdown(wait=False, cancel_futures=True)

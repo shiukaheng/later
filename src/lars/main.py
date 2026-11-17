@@ -1,8 +1,9 @@
 import os
 
 from lars import store
-from lars.bandit import ThompsonBandit
 from lars.evolve import propose_replacement, should_retire
+from lars.factored import FactoredBandit
+from lars.measure import measure
 from lars.prefetch import Prefetcher
 from lars.rater import rate
 from lars.strategies import propose_strategies
@@ -11,37 +12,51 @@ TOPIC = "learning Python"
 AUDIENCE = "beginner programmers"
 MAX_CONCURRENT = int(os.environ.get("LARS_MAX_CONCURRENT", 3))
 
+# Fixed dimensions. "style" levels are proposed by the LLM and evolve (EVOLVING).
+LENGTH = ["short: under 100 characters", "medium: 100-200 characters", "long: 200-280 characters"]
+EMOJI = ["no emojis at all", "one or two emojis", "lots of emojis (5 or more)"]
+EVOLVING = ["style"]
 
-def info(bandit: ThompsonBandit, log: list[dict], retired: list[str]) -> None:
+
+def info(bandit: FactoredBandit, log: list[dict], retired: dict[str, list[str]]) -> None:
     """Unblinds the experiment. Only shown via the hidden 'i' command."""
-    print(f"\n  {len(log)} ratings. Posterior mean like rate per strategy:")
-    for i, (s, m, a, b) in enumerate(zip(bandit.arms, bandit.means(), bandit.alpha, bandit.beta)):
-        print(f"  [{i}] {m:.2f}  (n={int(a + b - 2):2d})  {s}")
-    for s in retired:
-        print(f"  retired: {s}")
+    print(f"\n  {len(log)} ratings. Like rate per level (n, measured avg chars/emojis):")
+    for dim, b in bandit.dims.items():
+        print(f"  {dim}:")
+        for level, m, a, bb in zip(b.arms, b.means(), b.alpha, b.beta):
+            hits = [e for e in log if e["levels"][dim] == level]
+            avg = lambda k: sum(e[k] for e in hits) / len(hits) if hits else 0
+            print(f"    {m:.2f}  n={int(a + bb - 2):2d}  {avg('chars'):3.0f}ch {avg('emojis'):3.1f}em  {level}")
+        for level in retired[dim]:
+            print(f"    retired: {level}")
     if log:
-        print(f"  previous tweet was from: {log[-1]['strategy']}")
+        print(f"  previous tweet: {log[-1]['levels']}")
 
 
 def main() -> None:
-    bandit, log, retired = store.load() or (ThompsonBandit(propose_strategies(TOPIC, AUDIENCE)), [], [])
-    prefetch = Prefetcher(bandit.arms, TOPIC, AUDIENCE, MAX_CONCURRENT)
+    loaded = store.load()
+    if loaded:
+        bandit, log, retired = loaded
+    else:
+        dims = {"style": propose_strategies(TOPIC, AUDIENCE), "length": LENGTH, "emoji": EMOJI}
+        bandit, log, retired = FactoredBandit(dims), [], {d: [] for d in dims}
+    prefetch = Prefetcher(bandit, TOPIC, AUDIENCE, MAX_CONCURRENT)
 
     try:
         while True:
-            arm = bandit.select()
-            strategy = bandit.arms[arm]
-            tweet = prefetch.take(arm)
+            choice, levels, tweet = prefetch.take()
             reward = rate(tweet, lambda: info(bandit, log, retired))
-            bandit.update(arm, reward)
-            log.append({"strategy": strategy, "tweet": tweet, "reward": reward})
+            bandit.update(choice, reward)
+            log.append({"levels": levels, "tweet": tweet, "reward": reward, **measure(tweet)})
 
-            dead = should_retire(bandit)
-            if dead is not None:
-                new = propose_replacement(bandit, dead, log, retired, TOPIC, AUDIENCE)
-                retired.append(bandit.arms[dead])
-                bandit.replace(dead, new)
-                prefetch.replace(dead, new)
+            for dim in EVOLVING:
+                b = bandit.dims[dim]
+                dead = should_retire(b)
+                if dead is not None:
+                    new = propose_replacement(b, dim, dead, log, retired[dim], TOPIC, AUDIENCE)
+                    retired[dim].append(b.arms[dead])
+                    b.replace(dead, new)
+                    prefetch.refill()  # queued tweets may use the retired level
             store.save(bandit, log, retired)
     except (KeyboardInterrupt, EOFError):
         pass
