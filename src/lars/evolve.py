@@ -47,7 +47,7 @@ def propose_level(
     best = bandit.arms[int(np.argmax(bandit.means()))]
 
     def tweets(level: str, reward: int) -> str:
-        hits = [e["tweet"] for e in log if e["levels"][dim] == level and e["reward"] == reward]
+        hits = [e["tweet"] for e in log if e["levels"].get(dim) == level and e["reward"] == reward]
         return "\n".join(f"- {t}" for t in hits[-EXAMPLES:]) or "- (none)"
 
     stats = "\n".join(

@@ -4,6 +4,7 @@ import threading
 import time
 
 from lars import store
+from lars.bandit import ThompsonBandit
 from lars.evolve import propose_level, should_propose, should_retire
 from lars.factored import FactoredBandit
 from lars.measure import measure
@@ -14,17 +15,25 @@ TOPIC = "learning Python"
 AUDIENCE = "beginner programmers"
 MAX_CONCURRENT = int(os.environ.get("LARS_MAX_CONCURRENT", 3))
 
-# Dimensions. "style" starts LLM-proposed; MOOD starts from these seeds. Dimensions in
-# EVOLVING get levels retired/replaced and new ones proposed; length and emoji stay fixed.
+# Dimensions. "style" starts LLM-proposed; the others start from these seeds. Dimensions in
+# EVOLVING get levels retired/replaced and new ones proposed; length stays fixed.
 LENGTH = ["tiny: under 50 characters", "short: 50-100 characters", "medium: 100-160 characters"]
-EMOJI = ["no emojis at all", "one or two emojis", "lots of emojis (5 or more)"]
+VISUAL = [
+    "plain text, no emojis or formatting",
+    "one or two emojis",
+    "emoji-heavy (5 or more emojis)",
+    "line breaks or a short list",
+    "ALL CAPS words for emphasis",
+    "ends with hashtags",
+]
 MOOD = [
     "happy and upbeat",
     "ragebait: a provocative take designed to make people argue",
     "rant: frustrated and venting",
     "calm and matter-of-fact",
 ]
-EVOLVING = ["style", "mood"]
+SEEDED = {"length": LENGTH, "visual": VISUAL, "mood": MOOD}
+EVOLVING = ["style", "visual", "mood"]
 MAX_RETRIES = 5  # regenerate a duplicate tweet at most this many times, then show it anyway
 log = logging.getLogger("lars")
 
@@ -37,9 +46,10 @@ class Session:
         loaded = store.load()
         if loaded:
             self.bandit, self.log, self.retired = loaded
+            self._migrate()
         else:
             log.info("new session: asking LLM for initial styles...")
-            dims = {"style": propose_strategies(TOPIC, AUDIENCE), "length": LENGTH, "emoji": EMOJI, "mood": MOOD}
+            dims = {"style": propose_strategies(TOPIC, AUDIENCE), **SEEDED}
             self.bandit, self.log, self.retired = FactoredBandit(dims), [], {d: [] for d in dims}
         log.info("session ready: %d ratings so far, %d-way prefetch", len(self.log), MAX_CONCURRENT)
         self.prefetch = Prefetcher(self.bandit, TOPIC, AUDIENCE, MAX_CONCURRENT)
@@ -47,6 +57,19 @@ class Session:
         self.seen = {e["tweet"] for e in self.log}  # every tweet ever shown
         self.next_id = 0
         self.lock = threading.Lock()
+
+    def _migrate(self) -> None:
+        """Bring a saved session in line with the current dimensions: add new ones
+        (fresh priors), drop removed ones. Ratings for kept dimensions are preserved."""
+        wanted = {"style", *SEEDED}
+        for name in set(self.bandit.dims) - wanted:
+            del self.bandit.dims[name]
+            self.retired.pop(name, None)
+            log.info("dropped dimension '%s'", name)
+        for name in wanted - set(self.bandit.dims):
+            self.bandit.dims[name] = ThompsonBandit(SEEDED[name])
+            self.retired[name] = []
+            log.info("added dimension '%s'", name)
 
     def next(self) -> tuple[int, str]:
         """Return (id, tweet), skipping exact duplicates of any tweet already shown.
@@ -104,7 +127,7 @@ class Session:
         for dim, b in self.bandit.dims.items():
             out.append(f"{dim}:")
             for level, m, a, bb in zip(b.arms, b.means(), b.alpha, b.beta):
-                hits = [e for e in self.log if e["levels"][dim] == level]
+                hits = [e for e in self.log if e["levels"].get(dim) == level]
                 avg = lambda k: sum(e[k] for e in hits) / len(hits) if hits else 0
                 out.append(f"  {m:.2f}  n={int(a + bb - 2):2d}  {avg('chars'):3.0f}ch {avg('emojis'):3.1f}em  {level}")
             out += [f"  retired: {level}" for level in self.retired[dim]]
