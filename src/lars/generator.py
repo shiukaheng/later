@@ -1,11 +1,6 @@
-import os
-
 from pydantic import BaseModel
 
 from lars.llm import ask
-
-# Higher = more varied tweets within each level combination.
-TEMPERATURE = float(os.environ.get("LARS_TEMPERATURE", 1.2))
 
 
 class Tweet(BaseModel):
@@ -19,4 +14,4 @@ def generate_tweet(levels: dict[str, str], topic: str, audience: str) -> str:
         f"Write one short tweet about {topic} for {audience}.\n"
         f"Follow every requirement strictly:\n{spec}"
     )
-    return ask(prompt, Tweet, temperature=TEMPERATURE).text
+    return ask(prompt, Tweet).text

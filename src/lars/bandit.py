@@ -1,4 +1,10 @@
+import os
+
 import numpy as np
+
+# Exploration: >1 inflates posteriors (acts as if we had 1/EXPLORE as much data),
+# so weaker arms get tried more often. 1 = standard Thompson sampling.
+EXPLORE = float(os.environ.get("LARS_EXPLORE", 1.0))
 
 
 class ThompsonBandit:
@@ -11,7 +17,9 @@ class ThompsonBandit:
         self.rng = np.random.default_rng(seed)
 
     def select(self) -> int:
-        return int(np.argmax(self.rng.beta(self.alpha, self.beta)))
+        a = 1 + (self.alpha - 1) / EXPLORE
+        b = 1 + (self.beta - 1) / EXPLORE
+        return int(np.argmax(self.rng.beta(a, b)))
 
     def update(self, arm: int, reward: int) -> None:
         self.alpha[arm] += reward

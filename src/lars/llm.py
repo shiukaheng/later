@@ -1,10 +1,7 @@
 import os
 
-from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel
-
-load_dotenv(override=True)
 
 # OpenAI-compatible endpoint. Point OPENAI_BASE_URL at any local server.
 MODEL = os.environ.get("LARS_MODEL", "gpt-4o-mini")
