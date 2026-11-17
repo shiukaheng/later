@@ -37,8 +37,7 @@ def propose_level(
     dim: str,
     log: list[dict],
     retired: list[str],
-    topic: str,
-    audience: str,
+    feed: str,
     dead: int | None = None,
 ) -> str:
     """Ask the LLM for one new level of `dim`, conditioned on the existing levels,
@@ -56,7 +55,7 @@ def propose_level(
     )
     excluded = retired + ([bandit.arms[dead]] if dead is not None else [])
     parts = [
-        f"We write tweets about {topic} for {audience}. A user likes or skips each tweet.",
+        f"We write tweets for {feed}. A user likes or skips each tweet.",
         f"Tweets vary along several dimensions; here we tune the '{dim}' dimension.",
         f"Current {dim} options:\n{stats}",
         f"Best {dim}: {best}\nTweets with it the user liked:\n{tweets(best, 1)}",

@@ -5,18 +5,25 @@ import time
 
 from lars import store
 from lars.bandit import ThompsonBandit
-from lars.evolve import propose_level, should_propose, should_retire
+from lars.evolve import PROPOSE_EVERY, propose_level, should_propose, should_retire
 from lars.factored import FactoredBandit
 from lars.measure import measure
 from lars.prefetch import Prefetcher
 from lars.strategies import propose_strategies
 
-TOPIC = "learning Python"
-AUDIENCE = "beginner programmers"
+FEED = os.environ.get("LARS_FEED", "a general Twitter/X timeline")
 MAX_CONCURRENT = int(os.environ.get("LARS_MAX_CONCURRENT", 3))
 
 # Dimensions. "style" starts LLM-proposed; the others start from these seeds. Dimensions in
 # EVOLVING get levels retired/replaced and new ones proposed; length stays fixed.
+TOPIC = [
+    "tech and AI",
+    "sports",
+    "food and cooking",
+    "pop culture, movies and music",
+    "everyday life and relatable moments",
+    "money, work and careers",
+]
 LENGTH = ["tiny: under 50 characters", "short: 50-100 characters", "medium: 100-160 characters"]
 VISUAL = [
     "plain text, no emojis or formatting",
@@ -32,8 +39,8 @@ MOOD = [
     "rant: frustrated and venting",
     "calm and matter-of-fact",
 ]
-SEEDED = {"length": LENGTH, "visual": VISUAL, "mood": MOOD}
-EVOLVING = ["style", "visual", "mood"]
+SEEDED = {"topic": TOPIC, "length": LENGTH, "visual": VISUAL, "mood": MOOD}
+EVOLVING = ["topic", "style", "visual", "mood"]
 MAX_RETRIES = 5  # regenerate a duplicate tweet at most this many times, then show it anyway
 log = logging.getLogger("lars")
 
@@ -49,10 +56,10 @@ class Session:
             self._migrate()
         else:
             log.info("new session: asking LLM for initial styles...")
-            dims = {"style": propose_strategies(TOPIC, AUDIENCE), **SEEDED}
+            dims = {"style": propose_strategies(FEED), **SEEDED}
             self.bandit, self.log, self.retired = FactoredBandit(dims), [], {d: [] for d in dims}
         log.info("session ready: %d ratings so far, %d-way prefetch", len(self.log), MAX_CONCURRENT)
-        self.prefetch = Prefetcher(self.bandit, TOPIC, AUDIENCE, MAX_CONCURRENT)
+        self.prefetch = Prefetcher(self.bandit, FEED, MAX_CONCURRENT)
         self.pending: dict[int, tuple[dict[str, str], str]] = {}
         self.seen = {e["tweet"] for e in self.log}  # every tweet ever shown
         self.next_id = 0
@@ -105,19 +112,21 @@ class Session:
             likes = sum(e["reward"] for e in self.log)
             log.info("rated #%d %s (%d ratings, %d likes)", tid, "LIKE" if reward else "skip", len(self.log), likes)
 
+            n = len(self.log)
+            turn = EVOLVING[(n // PROPOSE_EVERY) % len(EVOLVING)]  # one dimension grows per trigger
             for dim in EVOLVING:
                 b = self.bandit.dims[dim]
                 dead = should_retire(b)
                 if dead is not None:
                     log.info("retiring a %s level, asking LLM for a replacement...", dim)
-                    new = propose_level(b, dim, self.log, self.retired[dim], TOPIC, AUDIENCE, dead)
+                    new = propose_level(b, dim, self.log, self.retired[dim], FEED, dead)
                     self.retired[dim].append(b.arms[dead])
                     b.replace(dead, new)
                     self.prefetch.refill()  # queued tweets may use the retired level
                     log.info("replaced; tweet queue refilled")
-                if should_propose(b, len(self.log)):
+                if dim == turn and should_propose(b, n):
                     log.info("proposing a new %s level...", dim)
-                    b.add(propose_level(b, dim, self.log, self.retired[dim], TOPIC, AUDIENCE))
+                    b.add(propose_level(b, dim, self.log, self.retired[dim], FEED))
                     log.info("now %d %s levels", len(b.arms), dim)
             store.save(self.bandit, self.log, self.retired)
 
