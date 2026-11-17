@@ -40,7 +40,8 @@ const seen = new IntersectionObserver(entries => {
     if (!e.isIntersecting && e.boundingClientRect.bottom < 0 && !el.dataset.rated) {
       el.dataset.rated = "1";
       el.querySelector(".like").disabled = true;
-      fetch("/rate", { method: "POST", body: JSON.stringify({ id: +el.dataset.id, reward: +!!el.dataset.liked }) });
+      fetch("/rate", { method: "POST", body: JSON.stringify({ id: +el.dataset.id, reward: +!!el.dataset.liked }) })
+        .catch(err => console.warn("rate failed", err));
       seen.unobserve(el);
     }
   }
@@ -66,12 +67,28 @@ function render({ id, text }) {
 }
 
 // Infinite scroll: load one tweet at a time while the bottom is near.
+// On any error, show it and retry, never leave `loading` stuck.
 let loading = false, nearBottom = true;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function load() {
   if (loading) return;
   loading = true;
-  while (nearBottom) render(await (await fetch("/next")).json());
-  loading = false;
+  try {
+    while (nearBottom) {
+      try {
+        const res = await fetch("/next");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        render(await res.json());
+        more.textContent = "Loading…";
+      } catch (err) {
+        console.warn("load failed, retrying", err);
+        more.textContent = `Couldn't load (${err.message}), retrying…`;
+        await sleep(2000);
+      }
+    }
+  } finally {
+    loading = false;
+  }
 }
 new IntersectionObserver(([e]) => { nearBottom = e.isIntersecting; load(); }, { rootMargin: "800px" }).observe(more);
 

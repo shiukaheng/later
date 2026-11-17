@@ -1,5 +1,7 @@
 import json
+import logging
 import os
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -8,43 +10,59 @@ from lars.session import Session
 
 PORT = int(os.environ.get("LARS_PORT", 8000))
 PAGE = (Path(__file__).parent / "web.html").read_bytes()
+log = logging.getLogger("lars.web")
 
 
 def main() -> None:
     """Browser feed. Same backend (Session) as the terminal version."""
+    logging.basicConfig(
+        level=os.environ.get("LARS_LOG", "INFO"),
+        format="%(asctime)s %(levelname)-7s %(name)-9s %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    for name in ("httpx", "httpx2"):  # OpenAI SDK per-request logs
+        logging.getLogger(name).setLevel(logging.WARNING)
     session = Session()
 
     class Handler(BaseHTTPRequestHandler):
-        def send(self, body: bytes, ctype: str = "application/json") -> None:
-            self.send_response(200)
+        def send(self, body: bytes, ctype: str = "application/json", code: int = 200) -> None:
+            self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.end_headers()
             self.wfile.write(body)
 
-        def do_GET(self):
-            if self.path == "/":
+        def route(self) -> None:
+            if self.command == "GET" and self.path == "/":
                 self.send(PAGE, "text/html; charset=utf-8")
-            elif self.path == "/next":
+            elif self.command == "GET" and self.path == "/next":
                 tid, tweet = session.next()
                 self.send(json.dumps({"id": tid, "text": tweet}).encode())
-            elif self.path == "/info":
+            elif self.command == "GET" and self.path == "/info":
                 self.send(session.info().encode(), "text/plain; charset=utf-8")
-            else:
-                self.send_error(404)
-
-        def do_POST(self):
-            if self.path == "/rate":
+            elif self.command == "POST" and self.path == "/rate":
                 body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 session.rate(body["id"], int(body["reward"]))
                 self.send(b"{}")
             else:
-                self.send_error(404)
+                self.send(b"not found", "text/plain", 404)
 
-        def log_message(self, *args):  # keep the terminal quiet
+        def dispatch(self) -> None:
+            start = time.monotonic()
+            try:
+                self.route()
+            except Exception:
+                log.exception("%s %s failed", self.command, self.path)
+                self.send(b'{"error": "server error, see terminal"}', code=500)
+            if self.path != "/":
+                log.debug("%s %s %.2fs", self.command, self.path, time.monotonic() - start)
+
+        do_GET = do_POST = dispatch
+
+        def log_message(self, *args):  # replaced by our own logging above
             pass
 
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"LARS feed on http://localhost:{PORT}  (Ctrl-C to stop)", flush=True)
+    log.info("LARS feed on http://localhost:%d  (Ctrl-C to stop)", PORT)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
