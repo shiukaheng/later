@@ -14,8 +14,8 @@ from lars.strategies import propose_strategies
 FEED = os.environ.get("LARS_FEED", "a general Twitter/X timeline")
 MAX_CONCURRENT = int(os.environ.get("LARS_MAX_CONCURRENT", 3))
 
-# Dimensions. "style" starts LLM-proposed; the others start from these seeds. Dimensions in
-# EVOLVING get levels retired/replaced and new ones proposed; length stays fixed.
+# Dimensions. "style" starts LLM-proposed; the others start from these seeds. Every
+# dimension evolves: losing levels are retired/replaced and new ones are proposed.
 TOPIC = [
     "tech and AI",
     "sports",
@@ -40,7 +40,6 @@ MOOD = [
     "calm and matter-of-fact",
 ]
 SEEDED = {"topic": TOPIC, "length": LENGTH, "visual": VISUAL, "mood": MOOD}
-EVOLVING = ["topic", "style", "visual", "mood"]
 MAX_RETRIES = 5  # regenerate a duplicate tweet at most this many times, then show it anyway
 log = logging.getLogger("lars")
 
@@ -113,8 +112,9 @@ class Session:
             log.info("rated #%d %s (%d ratings, %d likes)", tid, "LIKE" if reward else "skip", len(self.log), likes)
 
             n = len(self.log)
-            turn = EVOLVING[(n // PROPOSE_EVERY) % len(EVOLVING)]  # one dimension grows per trigger
-            for dim in EVOLVING:
+            dims = list(self.bandit.dims)
+            turn = dims[(n // PROPOSE_EVERY) % len(dims)]  # one dimension grows per trigger
+            for dim in dims:
                 b = self.bandit.dims[dim]
                 dead = should_retire(b)
                 if dead is not None:

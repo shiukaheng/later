@@ -6,17 +6,31 @@ from pydantic import BaseModel
 from lars.bandit import ThompsonBandit
 from lars.llm import ask
 
-THRESHOLD = 0.95  # retire if P(level worse than best) exceeds this
-MIN_N = 5  # ...and the level has at least this many ratings
+# Retire a level if P(worse than the best tested level) > THRESHOLD and it has >= MIN_N
+# ratings. Simulated trade-off, per dimension of 6 levels over 300 ratings at a 30% like rate:
+#   0.95/5:  ~3.9 false retirements of equally good levels; a clearly bad level caught fast
+#   0.99/10: ~0.3 false retirements; a bad level caught in ~half of runs, after ~300 ratings
+THRESHOLD = float(os.environ.get("LARS_RETIRE_THRESHOLD", 0.99))
+MIN_N = int(os.environ.get("LARS_RETIRE_MIN_N", 10))
 EXAMPLES = 3  # tweets of each kind shown to the LLM
 PROPOSE_EVERY = int(os.environ.get("LARS_PROPOSE_EVERY", 15))  # add a new level every N ratings
 MAX_LEVELS = int(os.environ.get("LARS_MAX_LEVELS", 8))  # ...unless the dimension already has this many
 
 
+def tested_best(bandit: ThompsonBandit) -> int | None:
+    """Best level among those with at least MIN_N ratings. Untested levels sit at the
+    prior mean 0.5, which would beat everything when the user rarely likes."""
+    n = bandit.alpha + bandit.beta - 2
+    tested = [i for i in range(len(n)) if n[i] >= MIN_N]
+    return max(tested, key=lambda i: bandit.means()[i]) if tested else None
+
+
 def should_retire(bandit: ThompsonBandit, samples: int = 4000) -> int | None:
-    """Return the level most confidently worse than the best level, if any."""
+    """Return the tested level most confidently worse than the best tested level, if any."""
+    best = tested_best(bandit)
+    if best is None:
+        return None
     draws = bandit.rng.beta(bandit.alpha, bandit.beta, size=(samples, len(bandit.arms)))
-    best = int(np.argmax(bandit.means()))
     p_worse = (draws < draws[:, [best]]).mean(axis=0)
     n = bandit.alpha + bandit.beta - 2
     ok = [i for i in range(len(p_worse)) if n[i] >= MIN_N and p_worse[i] > THRESHOLD]
@@ -43,7 +57,8 @@ def propose_level(
     """Ask the LLM for one new level of `dim`, conditioned on the existing levels,
     their like rates, example tweets, and everything retired. If `dead` is given,
     the new level replaces that one."""
-    best = bandit.arms[int(np.argmax(bandit.means()))]
+    b_i = tested_best(bandit)
+    best = bandit.arms[b_i if b_i is not None else int(np.argmax(bandit.means()))]
 
     def tweets(level: str, reward: int) -> str:
         hits = [e["tweet"] for e in log if e["levels"].get(dim) == level and e["reward"] == reward]
