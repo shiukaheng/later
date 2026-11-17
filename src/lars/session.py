@@ -14,7 +14,8 @@ TOPIC = "learning Python"
 AUDIENCE = "beginner programmers"
 MAX_CONCURRENT = int(os.environ.get("LARS_MAX_CONCURRENT", 3))
 
-# Fixed dimensions. "style" levels are proposed by the LLM and evolve (EVOLVING).
+# Dimensions. "style" starts LLM-proposed; MOOD starts from these seeds. Dimensions in
+# EVOLVING get levels retired/replaced and new ones proposed; length and emoji stay fixed.
 LENGTH = ["tiny: under 50 characters", "short: 50-100 characters", "medium: 100-160 characters"]
 EMOJI = ["no emojis at all", "one or two emojis", "lots of emojis (5 or more)"]
 MOOD = [
@@ -23,7 +24,7 @@ MOOD = [
     "rant: frustrated and venting",
     "calm and matter-of-fact",
 ]
-EVOLVING = ["style"]
+EVOLVING = ["style", "mood"]
 MAX_RETRIES = 5  # regenerate a duplicate tweet at most this many times, then show it anyway
 log = logging.getLogger("lars")
 
