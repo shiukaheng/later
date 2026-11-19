@@ -2,10 +2,24 @@ import unittest
 from unittest.mock import Mock, patch
 
 from lars.learning.bandit import FactoredBandit
+from lars.learning.posteriors import ledger_events, posterior_trends
 from lars.learning.recommender import Recommender
 
 
 class RecommenderTests(unittest.TestCase):
+    def test_manual_retirement_reserves_old_text_and_keeps_a_valid_dimension(self):
+        bandit = FactoredBandit({"topic": ["cats", "sports"]})
+        recommender = Recommender(bandit, "test feed")
+        recommender.retire_option("topic", "sports")
+        self.assertEqual(recommender.choose(), {"topic": "cats"})
+        with self.assertRaises(ValueError):
+            recommender.retire_option("topic", "cats")
+        for text in ("", " Cats! ", "sports"):
+            with self.assertRaises(ValueError):
+                recommender.add_option("topic", text)
+        recommender.add_option("topic", "science")
+        self.assertEqual(bandit.dims["topic"].arms, ["cats", "science"])
+
     def test_headless_feedback_credits_the_strategy_used_to_generate(self):
         bandit = FactoredBandit({"topic": ["cats"], "style": ["deadpan"]})
         generate = Mock(return_value="The cat has declined to comment.")
@@ -38,3 +52,14 @@ class RecommenderTests(unittest.TestCase):
         self.assertEqual((topic.alpha[-1], topic.beta[-1]), (1, 1))
         self.assertEqual(recommender.retired["topic"], ["sports"])
         self.assertEqual(propose.call_args.args[-1], 1)
+        trends = posterior_trends(recommender.checkpoints)["topic"]
+        self.assertEqual([point["rating"] for point in trends["sports"]], [0, 1])
+        self.assertAlmostEqual(trends["sports"][-1]["estimate"], 1 / 103)
+        self.assertEqual(trends["science"][0]["rating"], 1)
+        self.assertEqual(trends["science"][0]["credible_interval"], [0.025, 0.975])
+        event = ledger_events(recommender.checkpoints)[-1]
+        self.assertEqual(event["kind"], "retired")
+        self.assertEqual(event["removed"], [("topic", "sports")])
+        self.assertEqual(event["added"], [("topic", "science")])
+        self.assertEqual(event["details"]["comparison"], "cats")
+        self.assertGreater(event["details"]["probability"], event["details"]["threshold"])

@@ -1,8 +1,10 @@
 import json
 import re
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from lars.learning.bandit import FactoredBandit
+from lars.learning.posteriors import Checkpoint
 
 PATH = Path("data/session.json")
 
@@ -14,16 +16,26 @@ def profile_path(profile: str = "default") -> Path:
     return PATH if profile == "default" else PATH.parent / "profiles" / f"{profile}.json"
 
 
-def save(bandit: FactoredBandit, log: list[dict], retired: dict[str, list[str]], path: Path = PATH) -> None:
+def save(bandit: FactoredBandit, log: list[dict], retired: dict[str, list[str]], path: Path = PATH,
+         *, checkpoints: list[Checkpoint] | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     dims = {
         name: {"levels": b.arms, "alpha": b.alpha.tolist(), "beta": b.beta.tolist()}
         for name, b in bandit.dims.items()
     }
-    path.write_text(json.dumps({"dims": dims, "retired": retired, "log": log}, indent=2))
+    state = {"dims": dims, "retired": retired, "log": log,
+             "ledger_version": 1, "ledger": checkpoints or []}
+    with NamedTemporaryFile(mode="w", dir=path.parent, encoding="utf-8", delete=False) as output:
+        temp_path = Path(output.name)
+        try:
+            json.dump(state, output)
+            output.close()
+            temp_path.replace(path)
+        finally:
+            temp_path.unlink(missing_ok=True)
 
 
-def load(path: Path = PATH) -> tuple[FactoredBandit, list[dict], dict[str, list[str]]] | None:
+def load(path: Path = PATH) -> tuple[FactoredBandit, list[dict], dict[str, list[str]], list[Checkpoint]] | None:
     if not path.exists():
         return None
     state = json.loads(path.read_text())
@@ -31,4 +43,4 @@ def load(path: Path = PATH) -> tuple[FactoredBandit, list[dict], dict[str, list[
     for name, d in state["dims"].items():
         bandit.dims[name].alpha[:] = d["alpha"]
         bandit.dims[name].beta[:] = d["beta"]
-    return bandit, state["log"], state["retired"]
+    return bandit, state["log"], state["retired"], state.get("ledger", state.get("checkpoints", []))

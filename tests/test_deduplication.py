@@ -36,6 +36,7 @@ class DeduplicationTests(unittest.TestCase):
         session = Session.__new__(Session)
         import threading
         session.lock = threading.Lock()
+        session.queue_revision = 0
         future = Future()
         future.set_result(Recommendation("x" * 281, {}))
         session.prefetch = unittest.mock.Mock()

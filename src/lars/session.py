@@ -9,6 +9,7 @@ from lars.feed import profiles
 from lars.feed.prefetch import Prefetcher
 from lars.generation.posts import SEEDED
 from lars.learning.bandit import ThompsonBandit, same
+from lars.learning.posteriors import ledger_events, posterior_trends
 from lars.learning.recommender import Recommendation, Recommender
 
 FEED = os.environ.get("LARS_FEED", "a general Twitter/X timeline")
@@ -27,17 +28,22 @@ class Session:
         self.path = profiles.profile_path(profile)
         loaded = profiles.load(self.path)
         if loaded:
-            bandit, history, retired = loaded
-            self.recommender = Recommender(bandit, FEED, history=history, retired=retired)
+            bandit, history, retired, checkpoints = loaded
+            self.recommender = Recommender(bandit, FEED, history=history, retired=retired, checkpoints=checkpoints)
             self._migrate()
+            if self.recommender.record_posterior():
+                self._save()
         else:
             log.info("new session: asking LLM for initial styles...")
             self.recommender = Recommender.fresh(FEED)
+            self._save()
         log.info("session ready: %d ratings so far, %d-way prefetch", len(self.recommender.history), MAX_CONCURRENT)
         self.prefetch = Prefetcher(self.recommender, MAX_CONCURRENT)
         self.pending: dict[int, Recommendation] = {}
         self.seen = {entry["tweet"] for entry in self.recommender.history}
-        self.next_id = 0
+        self.next_id = 1 + max((event["details"]["post_id"] for event in self.recommender.checkpoints
+                                if event.get("kind") == "served"), default=-1)
+        self.queue_revision = 0
         self.lock = threading.Lock()
 
     def next(self) -> dict:
@@ -46,6 +52,7 @@ class Session:
         for attempt in range(MAX_RETRIES + 1):
             with self.lock:
                 future = self.prefetch.take()
+                revision = self.queue_revision
             try:
                 item = future.result()
             except Exception as e:  # LLM error, or cancelled by a queue refill
@@ -53,6 +60,8 @@ class Session:
                 continue
             tweet = item.text
             with self.lock:
+                if revision != self.queue_revision:
+                    continue
                 if tweet in self.seen and attempt < MAX_RETRIES:
                     log.info("skipped exact duplicate tweet")
                     continue
@@ -62,6 +71,8 @@ class Session:
                 self.seen.add(tweet)
                 tid, self.next_id = self.next_id, self.next_id + 1
                 self.pending[tid] = item
+                self.recommender.record_served(tid, item)
+                self._save()
             log.info("served #%d after %.2fs (%d on screen unrated)", tid, time.monotonic() - start, len(self.pending))
             return {"id": tid, "text": tweet}
         raise RuntimeError(f"no tweet after {MAX_RETRIES + 1} attempts")
@@ -74,14 +85,71 @@ class Session:
             recommender = self.recommender
             if reward not in (0, 1):
                 raise ValueError("reward must be 0 or 1")
-            if recommender.learn(self.pending.pop(tid), reward):
-                self.prefetch.refill()
-            profiles.save(recommender.bandit, recommender.history, recommender.retired, self.path)
+            try:
+                if recommender.learn(self.pending.pop(tid), reward, post_id=tid):
+                    self._refresh_queue()
+            finally:
+                self._save()
             log.info("rated #%d %s (%d ratings)", tid, "LIKE" if reward else "skip", len(recommender.history))
 
     @property
     def rating_count(self) -> int:
         return len(self.recommender.history)
+
+    def policy_snapshot(self) -> dict:
+        """Return a detached view of policy options and the recorded reward trace."""
+        with self.lock:
+            recommender = self.recommender
+            return {
+                "dimensions": {
+                    name: {
+                        "active": [
+                            {"text": text, "estimate": float(mean), "effective_n": float(a + b - 2),
+                             "likes": float(a - 1), "skips": float(b - 1)}
+                            for text, mean, a, b in zip(bandit.arms, bandit.means(), bandit.alpha, bandit.beta)
+                        ],
+                        "retired": list(recommender.retired[name]),
+                    }
+                    for name, bandit in recommender.bandit.dims.items()
+                },
+                "ratings": [
+                    {"reward": entry["reward"], "levels": dict(entry["levels"])}
+                    for entry in recommender.history
+                ],
+                "posterior_trends": posterior_trends(recommender.checkpoints),
+            }
+
+    def policy_timeline(self) -> list[dict]:
+        with self.lock:
+            return ledger_events(self.recommender.checkpoints)
+
+    def change_option(self, action: str, dimension: str, *, option: str = "", text: str = "",
+                      field: str = "", value: float | None = None) -> None:
+        with self.lock:
+            recommender = self.recommender
+            match action:
+                case "add":
+                    recommender.add_option(dimension, text)
+                case "edit":
+                    if not recommender.edit_option(dimension, option, text):
+                        return
+                case "retire":
+                    recommender.retire_option(dimension, option)
+                case "evidence":
+                    recommender.override_evidence(dimension, option, field, value)
+                case _:
+                    raise ValueError("Unknown policy action.")
+            self._refresh_queue()
+            self._save()
+
+    def _refresh_queue(self) -> None:
+        self.queue_revision += 1
+        self.prefetch.refill()
+
+    def _save(self) -> None:
+        recommender = self.recommender
+        profiles.save(recommender.bandit, recommender.history, recommender.retired, self.path,
+                      checkpoints=recommender.checkpoints)
 
     def info(self) -> str:
         """Unblinds the experiment. Only shown via the hidden 'i' command."""

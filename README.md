@@ -24,14 +24,18 @@ LARS_MODEL=qwen2.5:7b
 ```
 
 ```sh
-uv run --locked lars-web --profile demo  # http://127.0.0.1:8000
+uv run lars-web --profile demo  # http://127.0.0.1:8000
 ```
 
-- **Browser:** Click the heart to like. Scrolling past records a like or skip. Press `i` to see the estimated like rates and sample sizes.
-- **Terminal:** Replace `lars-web` with `lars`. Enter `l` to like, Enter alone to skip, or `i` then Enter for stats.
+- **Browser:** Install [Bun](https://bun.com/) to build the frontend automatically from source. Click the heart to like; scrolling past records a like or skip. Press `i` or open `/dashboard` to edit instructions and effective likes/skips in the policy grid. The chart shows stepped policy estimates and 95% credible bands for every visible option, alongside the dotted overall rolling like rate. Older profiles keep their full reward history; their policy traces start at the first saved checkpoint.
+- **Terminal:** Run `uv run --locked lars --profile demo` without a frontend build. Enter `l` to like, Enter alone to skip, or `i` then Enter for stats.
 - **Try it:** Use a fresh profile, rate a post, and press `i` to see the update. Restart with the same profile to verify it was saved.
+- **Timeline:** Open the dashboard's Timeline tab to see when options appeared, changed, or were retired. Each column follows one option: red to green is the estimated like rate, and stronger color means a narrower credible interval. Click an event to inspect its details. The local profile ledger records served posts, ratings, and policy changes.
+
+For frontend development, run `uv run --locked lars-web` from the repo root, then `bun run dev` from `frontend/` in a second terminal. Open the Vite URL it prints. Vite proxies API requests to port `8000` by default; set `LARS_WEB_ORIGIN` for a different backend address. To refresh the production assets after editing the frontend, run `bun run build` from `frontend/`.
 
 ## Source map
 
 - [Recommender](src/lars/learning/recommender.py) is the headless algorithm. `recommend()` returns text with the strategy that produced it; `learn(item, reward)` updates the bandits and evolves their options. You can supply your own generator and strategy proposer.
 - [Session](src/lars/session.py) connects the recommender to profiles, background generation, and feedback IDs. Both [terminal](src/lars/main.py) and [web](src/lars/web.py) use it. The web layer adds synthetic authors and engagement counts for display.
+- [Frontend](frontend/src) is React and TypeScript, with Chart.js for reward plots. It reads the JSON policy snapshot from `GET /api/policies` and sends edits to `POST /api/policies`; Python validates and saves them.

@@ -14,3 +14,7 @@ wheels/
 
 # Session state
 data/
+
+# Web build and dependencies
+frontend/node_modules/
+src/lars/web_dist/

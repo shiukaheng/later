@@ -1,5 +1,6 @@
 import logging
 import os
+from dataclasses import dataclass
 
 import numpy as np
 from pydantic import BaseModel
@@ -28,7 +29,17 @@ def tested_best(bandit: ThompsonBandit) -> int | None:
     return max(tested, key=lambda i: bandit.means()[i]) if tested else None
 
 
-def should_retire(bandit: ThompsonBandit, samples: int = 4000) -> int | None:
+@dataclass(frozen=True)
+class Retirement:
+    option: int
+    comparison: str
+    probability: float
+    threshold: float
+    effective_n: float
+    comparison_n: float
+
+
+def retirement_decision(bandit: ThompsonBandit, samples: int = 4000) -> Retirement | None:
     """Return the tested level most confidently worse than the best tested level, if any."""
     best = tested_best(bandit)
     if best is None:
@@ -37,7 +48,11 @@ def should_retire(bandit: ThompsonBandit, samples: int = 4000) -> int | None:
     p_worse = (draws < draws[:, [best]]).mean(axis=0)
     n = bandit.alpha + bandit.beta - 2
     ok = [i for i in range(len(p_worse)) if n[i] >= MIN_N and p_worse[i] > THRESHOLD]
-    return max(ok, key=lambda i: p_worse[i]) if ok else None
+    if not ok:
+        return None
+    loser = max(ok, key=lambda i: p_worse[i])
+    return Retirement(int(loser), bandit.arms[best], float(p_worse[loser]), THRESHOLD,
+                      float(n[loser]), float(n[best]))
 
 
 def should_propose(bandit: ThompsonBandit, n_ratings: int) -> bool:
