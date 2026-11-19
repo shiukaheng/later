@@ -23,7 +23,9 @@ button:disabled { cursor: default; opacity: .5; }
 .feed { max-width: 600px; min-height: 100%; margin: auto; border-inline: 1px solid var(--border); }
 .tabs { position: sticky; top: 0; z-index: 1; display: flex; text-align: center; background: var(--tab); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
 .tabs > * { position: relative; flex: 1; padding: 16px; }
-.tabs span, .meta span { color: var(--muted); }
+.tabs a, .meta span { color: var(--muted); }
+.tabs a { text-decoration: none; }
+.tabs a:hover, .tabs a:focus-visible { color: var(--text); }
 .tabs strong::after { content: ''; position: absolute; inset: auto 0 0; width: 56px; height: 4px; margin: auto; border-radius: 4px; background: #1d9bf0; }
 .tweet { display: flex; gap: 8px; padding: 12px 16px 4px; border-bottom: 1px solid var(--border); }
 .avatar { width: 40px; height: 40px; flex: none; border-radius: 50%; object-fit: cover; background: var(--border); }

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import { api, type Post } from './api'
 
 const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })
@@ -46,7 +47,10 @@ export function Feed({ paused }: { paused: boolean }) {
   }, [nearEnd, paused, posts.length, error, failures])
 
   return <div className={`feed-viewport${paused ? ' feed-paused' : ''}`} ref={viewport} inert={paused}><main className="feed">
-    <header className="tabs"><strong>For you</strong><span>Following</span></header>
+    <nav className="tabs" aria-label="Feed navigation">
+      <strong aria-current="page">For you</strong>
+      <Link to="/dashboard">Analytics</Link>
+    </nav>
     {posts.map(post => <Tweet key={post.id} post={post} paused={paused} root={viewport.current} />)}
     <div ref={sentinel} className="more" role="status">
       {error ? 'Could not load a post. Retrying…' : <span className="spinner" aria-label="Loading posts" />}
