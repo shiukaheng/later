@@ -4,8 +4,8 @@ import os
 import numpy as np
 from pydantic import BaseModel
 
-from lars.bandit import ThompsonBandit, same
-from lars.llm import NewsTool, ask
+from lars.generation.llm import ask
+from lars.learning.bandit import ThompsonBandit, same
 
 logger = logging.getLogger("lars")
 
@@ -57,7 +57,6 @@ def propose_level(
     feed: str,
     dead: int | None = None,
     attempts: int = 3,
-    stories: list[dict] | None = None,
 ) -> str | None:
     """Ask the LLM for one new level of `dim`, conditioned on the existing levels,
     their like rates, example tweets, and everything retired. If `dead` is given,
@@ -96,8 +95,7 @@ def propose_level(
     )
     known = bandit.arms + excluded
     for _ in range(attempts):
-        news = NewsTool(stories) if stories else None
-        level = (ask("\n\n".join(parts), Level, news=news) if news else ask("\n\n".join(parts), Level)).level.strip()
+        level = ask("\n\n".join(parts), Level).level.strip()
         if level and any(c.isalnum() for c in level) and not any(same(level, k) for k in known):
             return level
         logger.info("LLM proposed an empty or existing %s level, retrying", dim)

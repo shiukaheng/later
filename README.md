@@ -8,9 +8,8 @@ LARS (LLM Augmented Recommendation System) is a proof of concept for an interpre
 
 ## How it works
 
-- **Pick a strategy, then generate.** Strategies are plain-text instructions. You can edit the built-in options in [the source](src/lars/session.py). Thompson sampling picks which instructions to try, and the LLM follows them to write a post. A like counts as `1` and a skip as `0`. The bandit learns from those ratings without fine-tuning the LLM. When there is strong evidence that an option underperforms the best tested option in its dimension, LARS retires it and asks the LLM for a replacement.
-- **Learn one dimension at a time.** A factored bandit builds each strategy by picking one option per dimension: topic, style, length, visual formatting, mood, and optionally current events. Think “cute cats” + “deadpan one-liner” + “under 50 characters.” Each rating updates the selected options that are still active. This treats the dimensions independently rather than modeling interactions, so a rating for one combination informs others and the estimates are easy to inspect. [GAMBITT](https://arxiv.org/abs/2505.16311) also models the generated output; LARS credits the prompt choices.
-- **Generate today, curate next.** With `THENEWSAPI_TOKEN` set, the LLM can call a news-cache tool to draw on recent headlines. The same loop could pick search instructions and use a search tool to recommend existing posts or videos. That's a possible extension.
+- **Learning to pick a readable recommendation policy.** LARS continually tries multiple policies written as plain-text instructions. For each new post, Thompson sampling favors options that have earned likes while still trying options it knows less about. The LLM follows the selected instructions to write the post; likes (`1`) and skips (`0`) update the bandit without fine-tuning the LLM. LARS periodically asks the LLM for new options and replaces options that are very likely to underperform the best tested option in their dimension. You can edit the built-in options in [the source](src/lars/generation/posts.py).
+- **Factored multi-arm bandit for better efficiency.** Each policy combines one option per dimension: topic, style, length, visual formatting, and mood. Think “cute cats” + “deadpan one-liner” + “under 50 characters.” The factored bandit updates each selected option from a single rating, so feedback carries across policies that share an option. The tradeoff is that the bandit doesn't model interactions between dimensions. [GAMBITT](https://arxiv.org/abs/2505.16311) also models the generated output; LARS gives credit to the prompt choices.
 
 Ratings and preferences are saved locally. Run a local model to keep inference on your machine; browser avatars still load from Gravatar.
 
@@ -31,3 +30,8 @@ uv run --locked lars-web --profile demo  # http://127.0.0.1:8000
 - **Browser:** Click the heart to like. Scrolling past records a like or skip. Press `i` to see the estimated like rates and sample sizes.
 - **Terminal:** Replace `lars-web` with `lars`. Enter `l` to like, Enter alone to skip, or `i` then Enter for stats.
 - **Try it:** Use a fresh profile, rate a post, and press `i` to see the update. Restart with the same profile to verify it was saved.
+
+## Source map
+
+- [Recommender](src/lars/learning/recommender.py) is the headless algorithm. `recommend()` returns text with the strategy that produced it; `learn(item, reward)` updates the bandits and evolves their options. You can supply your own generator and strategy proposer.
+- [Session](src/lars/session.py) connects the recommender to profiles, background generation, and feedback IDs. Both [terminal](src/lars/main.py) and [web](src/lars/web.py) use it. The web layer adds synthetic authors and engagement counts for display.

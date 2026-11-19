@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-lars = "lars:main"
+lars = "lars.main:main"
 lars-web = "lars.web:main"
 
 [build-system]

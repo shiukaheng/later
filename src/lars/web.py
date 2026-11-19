@@ -4,9 +4,10 @@ import os
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Lock
 
-from lars.arguments import parse_args
-from lars.session import Session
+from lars.feed.synthetic import AuthorPool, engagement
+from lars.main import parse_args
 
 PORT = int(os.environ.get("LARS_PORT", 8000))
 PAGE = (Path(__file__).parent / "web.html").read_bytes()
@@ -16,6 +17,8 @@ log = logging.getLogger("lars.web")
 def main() -> None:
     """Browser feed. Same backend (Session) as the terminal version."""
     args = parse_args("Browser feed", web=True)
+    from lars.session import Session
+
     logging.basicConfig(
         level=os.environ.get("LARS_LOG", "INFO"),
         format="%(asctime)s %(levelname)-7s %(name)-9s %(message)s",
@@ -24,6 +27,8 @@ def main() -> None:
     for name in ("httpx", "httpx2"):  # OpenAI SDK per-request logs
         logging.getLogger(name).setLevel(logging.WARNING)
     session = Session(profile=args.profile)
+    authors = AuthorPool()
+    author_lock = Lock()
 
     class Handler(BaseHTTPRequestHandler):
         def send(self, body: bytes, ctype: str = "application/json", code: int = 200) -> None:
@@ -37,9 +42,10 @@ def main() -> None:
                 self.send(PAGE, "text/html; charset=utf-8")
             elif self.command == "GET" and self.path == "/next":
                 post = session.next()
-                a = post["author"]
+                with author_lock:
+                    a = authors.take()
                 author = {"id": a["id"], "name": a["name"], "handle": a["handle"], "avatar": a["avatar"]}
-                self.send(json.dumps({**post, "author": author}).encode())
+                self.send(json.dumps({**post, "author": author, "stats": engagement()}).encode())
             elif self.command == "GET" and self.path == "/info":
                 self.send(session.info().encode(), "text/plain; charset=utf-8")
             elif self.command == "POST" and self.path == "/rate":
@@ -73,4 +79,4 @@ def main() -> None:
     finally:
         server.server_close()
         session.close()
-        print(f"\nsaved {len(session.log)} ratings to {session.path}")
+        print(f"\nsaved {session.rating_count} ratings to {session.path}")

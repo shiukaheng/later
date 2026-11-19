@@ -1,12 +1,58 @@
+"""Synthetic authors and engagement counts for displaying generated posts."""
+
 import hashlib
+import json
+import logging
+import math
+import os
 import random
 import re
 import uuid
+from collections import deque
 from datetime import date
 from functools import cache
+from pathlib import Path
 
 from faker import Faker
 from unidecode import unidecode
+
+AUTHOR_PATH = Path("data/authors.json")
+AUTHOR_COUNT = int(os.environ.get("LARS_AUTHORS", 500))
+RECENT_AUTHORS = 20
+log = logging.getLogger("lars.authors")
+
+
+class AuthorPool:
+    """Reuse local synthetic accounts without showing the same one in quick succession."""
+
+    def __init__(self):
+        if AUTHOR_PATH.exists():
+            self.authors = json.loads(AUTHOR_PATH.read_text())
+        else:
+            self.authors = [make_author() for _ in range(AUTHOR_COUNT)]
+            AUTHOR_PATH.parent.mkdir(exist_ok=True)
+            AUTHOR_PATH.write_text(json.dumps(self.authors, ensure_ascii=False, indent=1))
+            log.info("generated %d accounts -> %s", len(self.authors), AUTHOR_PATH)
+        self.recent: deque[str] = deque(maxlen=min(RECENT_AUTHORS, len(self.authors) - 1))
+
+    def take(self) -> dict:
+        author = random.choice([a for a in self.authors if a["id"] not in self.recent])
+        self.recent.append(author["id"])
+        return author
+
+
+def engagement() -> dict[str, int]:
+    """Generate plausible counts independently of post content."""
+    views = max(12, int(math.exp(random.gauss(7.0, 1.6))))
+    likes = int(views * random.uniform(0.002, 0.04))
+    return {
+        "views": views,
+        "likes": likes,
+        "reposts": int(likes * random.uniform(0.02, 0.25)),
+        "replies": int(likes * random.uniform(0.03, 0.35)),
+        "minutes_ago": int(math.exp(random.uniform(0, math.log(60 * 24 * 3)))),
+    }
+
 
 # Name origin -> Faker locale. Each account draws an origin at random, so names are diverse.
 ORIGINS = {

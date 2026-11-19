@@ -2,7 +2,7 @@ import json
 import re
 from pathlib import Path
 
-from lars.factored import FactoredBandit
+from lars.learning.bandit import FactoredBandit
 
 PATH = Path("data/session.json")
 

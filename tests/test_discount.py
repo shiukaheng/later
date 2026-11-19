@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from lars.factored import FactoredBandit
+from lars.learning.bandit import FactoredBandit
 
 
 class DiscountTests(unittest.TestCase):
@@ -14,7 +14,7 @@ class DiscountTests(unittest.TestCase):
         mood.alpha[:] = [3]
         mood.beta[:] = [3]
 
-        with patch("lars.bandit.DISCOUNT", 0.5):
+        with patch("lars.learning.bandit.DISCOUNT", 0.5):
             bandit.update({"topic": "tech", "mood": "retired"}, 1)
 
         self.assertEqual(topic.alpha.tolist(), [4, 2])
@@ -24,7 +24,7 @@ class DiscountTests(unittest.TestCase):
 
     def test_unit_discount_preserves_old_evidence(self):
         bandit = FactoredBandit({"topic": ["tech"]})
-        with patch("lars.bandit.DISCOUNT", 1):
+        with patch("lars.learning.bandit.DISCOUNT", 1):
             bandit.update({"topic": "tech"}, 1)
             bandit.update({"topic": "tech"}, 0)
         self.assertEqual(bandit.dims["topic"].alpha[0], 2)

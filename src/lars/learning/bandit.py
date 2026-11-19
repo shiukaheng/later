@@ -11,6 +11,28 @@ if not 0 < DISCOUNT <= 1:
     raise ValueError("LARS_DISCOUNT must be greater than 0 and at most 1")
 
 
+class FactoredBandit:
+    """Select one arm per dimension and update each selected arm with the same reward."""
+
+    def __init__(self, dims: dict[str, list[str]]):
+        self.dims = {name: ThompsonBandit(levels) for name, levels in dims.items()}
+
+    def select(self) -> dict[str, int]:
+        return {name: bandit.select() for name, bandit in self.dims.items()}
+
+    def levels(self, choice: dict[str, int]) -> dict[str, str]:
+        return {name: self.dims[name].arms[index] for name, index in choice.items()}
+
+    def update(self, levels: dict[str, str], reward: int) -> None:
+        """Age all evidence, then credit options still active when the post is rated."""
+        for bandit in self.dims.values():
+            bandit.discount()
+        for name, level in levels.items():
+            bandit = self.dims[name]
+            if level in bandit.arms:
+                bandit.update(bandit.arms.index(level), reward)
+
+
 def same(a: str, b: str) -> bool:
     """Levels that differ only in case, spacing or punctuation are the same level."""
     norm = lambda s: " ".join("".join(c for c in s.lower() if c.isalnum() or c.isspace()).split())
