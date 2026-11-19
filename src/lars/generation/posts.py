@@ -14,7 +14,6 @@ SEEDED = {
         "everyday life and relatable moments",
         "money, work and careers",
     ],
-    "length": ["tiny: under 50 characters", "short: 50-100 characters", "medium: 100-160 characters"],
     "visual": [
         "plain text, no emojis or formatting",
         "one or two emojis",
@@ -44,7 +43,12 @@ def propose_strategies(feed: str, n: int = 4) -> list[str]:
     """Ask the model for the initial style options for a fresh profile."""
     prompt = (
         f"Propose {n} distinct styles for writing tweets on {feed}. Each is one short "
-        "sentence describing an angle or format (not a topic, mood, length or visual look)."
+        "instruction describing an angle or format (not a topic, mood, length or visual look). "
+        "Aim for posts that feel like real Twitter/X: a recognizable situation, a concrete detail, "
+        "or a specific opinion someone would actually share. For example, turn a small daily "
+        "friction into a one-line observation that names the object and what went wrong. "
+        "Avoid vague instructions like 'be relatable', generic engagement bait, and polished brand copy. "
+        "Choose styles that would produce noticeably different posts even on the same topic."
     )
     return ask(prompt, Strategies).strategies[:n]
 
@@ -53,7 +57,8 @@ def generate_tweet(levels: dict[str, str], feed: str) -> str:
     """LLM writes one tweet following the chosen level of each dimension."""
     spec = "\n".join(f"- {dim}: {level}" for dim, level in levels.items())
     prompt = (
-        f"Write one short, realistic tweet (at most 280 characters) as it might appear on {feed}.\n"
+        f"Write one realistic tweet as it might appear on {feed}.\n"
+        "Keep it concise: aim for one or two short sentences and stay under 280 characters.\n"
         f"Follow every requirement strictly, but never mention or label them "
         f"(do not name the mood, style, etc., in words or hashtags):\n{spec}\n"
         "Plain tweet text only. No markdown: no **bold**, *italics*, `code`, headings or "

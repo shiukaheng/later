@@ -121,11 +121,11 @@ class ProfileTests(unittest.TestCase):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 store.profile_path(name)
 
-    def test_current_events_profile_can_resume_without_news(self):
+    def test_profile_can_resume_after_dimensions_are_removed(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "profile.json"
-            bandit = FactoredBandit({"style": ["plain"], "topic": ["sports"], "current_events": ["use news"]})
-            levels = {"style": "plain", "topic": "sports", "current_events": "use news"}
+            levels = {"style": "plain", "topic": "sports", "current_events": "use news", "length": "short"}
+            bandit = FactoredBandit({dimension: [level] for dimension, level in levels.items()})
             bandit.update(levels, 1)
             history = [{"levels": levels, "tweet": "An older post", "reward": 1}]
             store.save(bandit, history, {dim: [] for dim in bandit.dims}, path)
@@ -139,6 +139,8 @@ class ProfileTests(unittest.TestCase):
                     self.assertEqual(recommender.bandit.dims["topic"].alpha[0], 2)
                     self.assertNotIn("current_events", recommender.bandit.dims)
                     self.assertNotIn("current_events", recommender.retired)
+                    self.assertNotIn("length", recommender.bandit.dims)
+                    self.assertNotIn("length", recommender.retired)
                     post = session.next()
                     self.assertEqual(post, {"id": 0, "text": "A new post"})
                     session.rate(post["id"], 1)
@@ -146,6 +148,7 @@ class ProfileTests(unittest.TestCase):
                     self.assertGreater(saved_bandit.dims["topic"].alpha[0], 2)
                     self.assertEqual(saved_log[0], history[0])
                     self.assertNotIn("current_events", saved_log[-1]["levels"])
+                    self.assertNotIn("length", saved_log[-1]["levels"])
                 finally:
                     session.close()
 

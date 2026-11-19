@@ -77,14 +77,13 @@ def propose_level(
     their like rates, example tweets, and everything retired. If `dead` is given,
     the new level replaces that one. Returns None if it only ever repeats known levels."""
     b_i = tested_best(bandit)
-    best = bandit.arms[b_i if b_i is not None else int(np.argmax(bandit.means()))]
 
     def tweets(level: str, reward: int) -> str:
         hits = [e["tweet"] for e in log if e["levels"].get(dim) == level and e["reward"] == reward]
         return "\n".join(f"- {t}" for t in hits[-EXAMPLES:]) or "- (none)"
 
     stats = "\n".join(
-        f"- {s} (like rate {m:.2f}, effective n={a + b - 2:.1f})"
+        f"- {s} (estimated like rate {m:.2f}, effective n={a + b - 2:.1f})"
         for s, m, a, b in zip(bandit.arms, bandit.means(), bandit.alpha, bandit.beta)
     )
     excluded = retired + ([bandit.arms[dead]] if dead is not None else [])
@@ -92,8 +91,20 @@ def propose_level(
         f"We write tweets for {feed}. A user likes or skips each tweet.",
         f"Tweets vary along several dimensions; here we tune the '{dim}' dimension.",
         f"Current {dim} options:\n{stats}",
-        f"Best {dim}: {best}\nTweets with it the user liked:\n{tweets(best, 1)}",
     ]
+    if b_i is None:
+        parts.append("No option has enough effective ratings to establish a frontrunner yet.")
+    else:
+        best = bandit.arms[b_i]
+        parts.append(f"Best sufficiently tested {dim}: {best}\nTweets with it the user liked:\n{tweets(best, 1)}")
+    parts.append(
+        "Judge what is working using both estimated like rates and effective sample sizes. "
+        "Being the best of a weak set or having a high estimate from very few ratings does not count as strong evidence. "
+        "If feedback is sparse or nothing is working well, consider several genuinely different directions "
+        "missing from the current and retired options, then pick one that tests a new hypothesis. "
+        "If a well-tested option is working very well, use the liked examples to identify what might be resonating "
+        "and try a narrower, unexplored niche nearby. Carry over the promising ingredient, not the whole instruction."
+    )
     if dead is not None:
         d = bandit.arms[dead]
         parts.append(
@@ -104,7 +115,7 @@ def propose_level(
         parts.append("Previously retired (do not repeat):\n" + "\n".join(f"- {s}" for s in excluded))
     parts.append(
         f"Propose ONE new {dim}, clearly distinct from all of the above (not a copy or rewording "
-        f"of any listed option), that the user is likely to like given what has worked. It must "
+        f"of any listed option). Make it concrete enough to guide a realistic Twitter/X post. It must "
         f"be achievable in a plain-text tweet of at most 280 characters: no markdown, bold or "
         f"other rich formatting. One short sentence. Only describe the {dim}."
     )
