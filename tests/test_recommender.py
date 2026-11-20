@@ -1,9 +1,9 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from lars.learning.bandit import FactoredBandit
-from lars.learning.posteriors import ledger_events, posterior_trends
-from lars.learning.recommender import Recommender
+from later.learning.bandit import FactoredBandit
+from later.learning.posteriors import ledger_events, posterior_trends
+from later.learning.recommender import Recommender
 
 
 class RecommenderTests(unittest.TestCase):
@@ -43,9 +43,9 @@ class RecommenderTests(unittest.TestCase):
         recommender = Recommender(bandit, "a test feed", generate=lambda *_: "A post", propose=propose)
         item = recommender.recommend({"topic": "sports"})
 
-        with patch("lars.learning.evolve.MIN_N", 10), patch("lars.learning.evolve.THRESHOLD", 0.99), \
-             patch("lars.learning.recommender.PROPOSE_EVERY", 15), patch("lars.learning.evolve.PROPOSE_EVERY", 15), \
-             patch("lars.learning.bandit.DISCOUNT", 1):
+        with patch("later.learning.evolve.MIN_N", 10), patch("later.learning.evolve.THRESHOLD", 0.99), \
+             patch("later.learning.recommender.PROPOSE_EVERY", 15), patch("later.learning.evolve.PROPOSE_EVERY", 15), \
+             patch("later.learning.bandit.DISCOUNT", 1):
             self.assertTrue(recommender.learn(item, 0))
 
         self.assertEqual(topic.arms, ["cats", "science"])

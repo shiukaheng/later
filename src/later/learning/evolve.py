@@ -5,20 +5,20 @@ from dataclasses import dataclass
 import numpy as np
 from pydantic import BaseModel
 
-from lars.generation.llm import ask
-from lars.learning.bandit import ThompsonBandit, same
+from later.generation.llm import ask
+from later.learning.bandit import ThompsonBandit, same
 
-logger = logging.getLogger("lars")
+logger = logging.getLogger("later")
 
 # Retire a level if P(worse than the best tested level) > THRESHOLD and it has >= MIN_N
 # ratings. Simulated trade-off, per dimension of 6 levels over 300 ratings at a 30% like rate:
 #   0.95/5:  ~3.9 false retirements of equally good levels; a clearly bad level caught fast
 #   0.99/10: ~0.3 false retirements; a bad level caught in ~half of runs, after ~300 ratings
-THRESHOLD = float(os.environ.get("LARS_RETIRE_THRESHOLD", 0.99))
-MIN_N = int(os.environ.get("LARS_RETIRE_MIN_N", 10))
+THRESHOLD = float(os.environ.get("LATER_RETIRE_THRESHOLD", 0.99))
+MIN_N = int(os.environ.get("LATER_RETIRE_MIN_N", 10))
 EXAMPLES = 3  # tweets of each kind shown to the LLM
-PROPOSE_EVERY = int(os.environ.get("LARS_PROPOSE_EVERY", 15))  # add a new level every N ratings
-MAX_LEVELS = int(os.environ.get("LARS_MAX_LEVELS", 8))  # ...unless the dimension already has this many
+PROPOSE_EVERY = int(os.environ.get("LATER_PROPOSE_EVERY", 15))  # add a new level every N ratings
+MAX_LEVELS = int(os.environ.get("LATER_MAX_LEVELS", 8))  # ...unless the dimension already has this many
 
 
 def tested_best(bandit: ThompsonBandit) -> int | None:

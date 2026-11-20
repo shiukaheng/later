@@ -4,11 +4,11 @@ import numpy as np
 
 # Exploration: >1 inflates posteriors (acts as if we had 1/EXPLORE as much data),
 # so weaker arms get tried more often. 1 = standard Thompson sampling.
-EXPLORE = float(os.environ.get("LARS_EXPLORE", 1.0))
+EXPLORE = float(os.environ.get("LATER_EXPLORE", 1.0))
 # Evidence halves after roughly 138 ratings at the default rate.
-DISCOUNT = float(os.environ.get("LARS_DISCOUNT", 0.995))
+DISCOUNT = float(os.environ.get("LATER_DISCOUNT", 0.995))
 if not 0 < DISCOUNT <= 1:
-    raise ValueError("LARS_DISCOUNT must be greater than 0 and at most 1")
+    raise ValueError("LATER_DISCOUNT must be greater than 0 and at most 1")
 
 
 class FactoredBandit:

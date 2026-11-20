@@ -6,11 +6,11 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 
-from lars.generation.posts import SEEDED, generate_tweet, propose_strategies
-from lars.generation.text import measure
-from lars.learning.bandit import FactoredBandit, ThompsonBandit, same
-from lars.learning.evolve import PROPOSE_EVERY, propose_level, retirement_decision, should_propose
-from lars.learning.posteriors import Checkpoint, capture
+from later.generation.posts import SEEDED, generate_tweet, propose_strategies
+from later.generation.text import measure
+from later.learning.bandit import FactoredBandit, ThompsonBandit, same
+from later.learning.evolve import PROPOSE_EVERY, propose_level, retirement_decision, should_propose
+from later.learning.posteriors import Checkpoint, capture
 
 log = logging.getLogger(__name__)
 

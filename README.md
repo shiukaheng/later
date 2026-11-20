@@ -1,15 +1,33 @@
-# LARS (LLM Augmented Recommendation System)
+# LATER (Language Arms for Thompson-based Evolving Recommendation)
 
-<img src="feed-preview.png" alt="Light-mode LARS For You feed on a gray background, showing six generated tweets" width="560">
+<img src="feed-preview.png" alt="Light-mode LATER For You feed on a gray background, showing six generated tweets" width="560">
 
 **What if users could own their recommendation systems, audit why they suggest content, and write the rules those systems explore?**
 
-LARS (LLM Augmented Recommendation System) is a proof of concept for an interpretable, fully self-hostable recommendation system designed to learn from very few ratings. The demo is a synthetic Twitter/X feed that starts with no account or imported history.
+LATER is a self-hostable proof of concept for personalization from sparse feedback. The demo is a synthetic Twitter/X feed that starts without an account or imported history. **The LLM proposes and follows readable instructions; a bandit tests which instructions work using likes and skips.**
+
+## Inspect and edit your feed
+
+The **Analytics** dashboard is central to the experiment: can users see what their recommender has learned and change the rules it explores?
+
+<img src="dashboard-preview.png" alt="LATER Analytics dashboard with an editable policy grid on the left and estimated like rates with credible bands on the right" width="900">
+
+- **Edit the rules.** Add, rewrite, or retire instructions, and override the effective likes and skips that guide future recommendations.
+- **See what the system knows.** Compare estimated like rates and 95% credible bands over time against the overall observed like rate.
+- **Audit changes.** The timeline shows which posts were served and rated, how the estimates changed, and why policies were retired. Overrides do not rewrite past ratings.
 
 ## How it works
 
-- **Multi-armed bandit on readable suggestion policies.** Thompson sampling explores plain-text instructions, and the LLM turns them into posts. Likes and skips update the bandit without fine-tuning the LLM. The LLM proposes new options as the bandit retires weak ones.
-- **Factored multi-arm bandit for better efficiency.** Each post combines a topic, style, visual format, and mood. One rating updates each selected option, sharing evidence across combinations without modeling interactions. [GAMBITT](https://arxiv.org/abs/2505.16311) also models the generated output.
+- **Multi-armed bandit on readable suggestion policies.** [Thompson sampling](https://proceedings.neurips.cc/paper_files/paper/2011/hash/e53a0a2978c28872a4505bdb51db06dc-Abstract.html) selects instructions for the LLM to follow. Feedback on the generated post updates the bandit. The LLM proposes new options as the bandit retires weak ones, without fine-tuning the model.
+- **Factored action space.** Each post combines a topic, style, visual format, and mood. One rating updates each selected option, sharing evidence across combinations without modeling interactions.
+
+LATER combines existing techniques to generate posts from immediate binary feedback. It does not rank existing posts, optimize long-term outcomes, or establish how many ratings are enough.
+
+## Related research
+
+- [Factored Bandits](https://arxiv.org/abs/1807.01488) (2018) studies compositional actions under limited feedback.
+- [GAMBITTS](https://arxiv.org/abs/2505.16311) and [Prompt Optimization with Logged Bandit Data](https://arxiv.org/abs/2504.02646) (2025) study feedback mediated by generated outputs. LATER uses simpler online updates that credit the selected instructions.
+- [Promptbreeder](https://proceedings.mlr.press/v235/fernando24a.html) (2024) evolves prompts through iterative evaluation. [Bonsai](https://doi.org/10.1145/3772318.3791855) (2026) lets users shape their social feeds through natural-language intentions.
 
 ## Run it
 
@@ -18,18 +36,16 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/). From the 
 ```dotenv
 OPENAI_BASE_URL=http://127.0.0.1:11434/v1
 OPENAI_API_KEY=ollama
-LARS_MODEL=qwen2.5:7b
+LATER_MODEL=qwen2.5:7b
 ```
 
 Ratings and preferences are saved locally. A local model keeps inference on your machine; browser avatars load from Gravatar.
 
 ```sh
-uv run lars-web --profile demo  # http://127.0.0.1:8000
+uv run later-web --profile demo  # http://127.0.0.1:8000
 ```
 
-- **Browser:** Install [Bun](https://bun.com/) to build the frontend automatically from source. Click the heart to like; scrolling past records a like or skip. Open **Analytics** to edit instructions and effective likes/skips in the policy grid. The chart shows stepped policy estimates and 95% credible bands for every visible option, alongside the dotted overall rolling like rate. Older profiles keep their full reward history; their policy traces start at the first saved checkpoint.
-- **Terminal:** Run `uv run --locked lars --profile demo` without a frontend build. Enter `l` to like, Enter alone to skip, or `i` then Enter for stats.
-- **Try it:** Use a fresh profile, rate a post, and open **Analytics** to see the update. Restart with the same profile to verify it was saved.
-- **Timeline:** Open the dashboard's Timeline tab to see when options appeared, changed, or were retired. Each column follows one option: red to green is the estimated like rate, and stronger color means a narrower credible interval. Click an event to inspect its details. The local profile ledger records served posts, ratings, and policy changes.
+- **Browser:** Install [Bun](https://bun.com/) for the automatic frontend build. Click the heart to like, then scroll past to record the rating. Open **Analytics** to see what changed.
+- **Terminal:** Run `uv run later --profile demo`. Type `l` then Enter to like, Enter alone to skip, or `i` then Enter for stats.
 
-For frontend development, run `uv run --locked lars-web` from the repo root, then `bun run dev` from `frontend/` in a second terminal. Open the Vite URL it prints. Vite proxies API requests to port `8000` by default; set `LARS_WEB_ORIGIN` for a different backend address. To refresh the production assets after editing the frontend, run `bun run build` from `frontend/`.
+For frontend development, run `uv run later-web` from the repo root and `bun run dev` from `frontend/` in a second terminal. Open the Vite URL it prints. Set `LATER_WEB_ORIGIN` if the backend uses a port other than `8000`.

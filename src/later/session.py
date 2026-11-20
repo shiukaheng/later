@@ -5,19 +5,19 @@ import os
 import threading
 import time
 
-from lars.feed import profiles
-from lars.feed.prefetch import Prefetcher
-from lars.generation.posts import SEEDED
-from lars.learning.bandit import ThompsonBandit, same
-from lars.learning.posteriors import ledger_events, posterior_trends
-from lars.learning.recommender import Recommendation, Recommender
+from later.feed import profiles
+from later.feed.prefetch import Prefetcher
+from later.generation.posts import SEEDED
+from later.learning.bandit import ThompsonBandit, same
+from later.learning.posteriors import ledger_events, posterior_trends
+from later.learning.recommender import Recommendation, Recommender
 
-FEED = os.environ.get("LARS_FEED", "a general Twitter/X timeline")
-MAX_CONCURRENT = int(os.environ.get("LARS_MAX_CONCURRENT", 3))
+FEED = os.environ.get("LATER_FEED", "a general Twitter/X timeline")
+MAX_CONCURRENT = int(os.environ.get("LATER_MAX_CONCURRENT", 3))
 
 MAX_CHARS = 280  # Twitter's limit; longer generations are discarded
 MAX_RETRIES = 5  # regenerate a duplicate tweet at most this many times, then show it anyway
-log = logging.getLogger("lars")
+log = logging.getLogger("later")
 
 
 class Session:

@@ -1,7 +1,7 @@
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 
-from lars.learning.recommender import Recommendation, Recommender
+from later.learning.recommender import Recommendation, Recommender
 
 
 class Prefetcher:

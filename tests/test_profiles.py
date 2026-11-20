@@ -4,11 +4,11 @@ from concurrent.futures import Future
 from pathlib import Path
 from unittest.mock import patch
 
-from lars.feed import profiles as store
-from lars.generation.posts import Tweet
-from lars.learning.bandit import FactoredBandit
-from lars.learning.recommender import Recommendation
-from lars.session import Session
+from later.feed import profiles as store
+from later.generation.posts import Tweet
+from later.learning.bandit import FactoredBandit
+from later.learning.recommender import Recommendation
+from later.session import Session
 
 
 class ProfileTests(unittest.TestCase):
@@ -18,7 +18,7 @@ class ProfileTests(unittest.TestCase):
             bandit = FactoredBandit({"style": ["plain", "deadpan"]})
             history = [{"reward": 0, "tweet": "A post", "levels": {"style": "plain"}}]
             store.save(bandit, history, {"style": []}, path)
-            with patch("lars.feed.profiles.profile_path", return_value=path), patch("lars.session.Prefetcher") as prefetch:
+            with patch("later.feed.profiles.profile_path", return_value=path), patch("later.session.Prefetcher") as prefetch:
                 session = Session("demo")
                 session.change_option("evidence", "style", option="plain", field="likes", value=12.5)
                 for invalid in (-1, float("nan"), float("inf"), True, None):
@@ -46,8 +46,8 @@ class ProfileTests(unittest.TestCase):
             bandit = FactoredBandit({"style": ["plain"], "topic": ["sports", "food"]})
             retired = {dim: [] for dim in bandit.dims}
             store.save(bandit, [], retired, path)
-            with patch("lars.feed.profiles.profile_path", return_value=path), \
-                 patch("lars.session.Prefetcher") as prefetch:
+            with patch("later.feed.profiles.profile_path", return_value=path), \
+                 patch("later.session.Prefetcher") as prefetch:
                 session = Session("demo")
                 ready = Future()
                 ready.set_result(Recommendation("A sports post", {"topic": "sports", "style": "plain"}))
@@ -88,8 +88,8 @@ class ProfileTests(unittest.TestCase):
             path = Path(tmp) / "profile.json"
             bandit = FactoredBandit({"style": ["plain"]})
             store.save(bandit, [], {"style": []}, path)
-            with patch("lars.feed.profiles.profile_path", return_value=path), \
-                 patch("lars.session.Prefetcher") as prefetch:
+            with patch("later.feed.profiles.profile_path", return_value=path), \
+                 patch("later.session.Prefetcher") as prefetch:
                 session = Session("demo")
                 fresh = Future()
                 fresh.set_result(Recommendation("New post", {"style": "deadpan"}))
@@ -130,8 +130,8 @@ class ProfileTests(unittest.TestCase):
             history = [{"levels": levels, "tweet": "An older post", "reward": 1}]
             store.save(bandit, history, {dim: [] for dim in bandit.dims}, path)
 
-            with patch("lars.feed.profiles.profile_path", return_value=path), \
-                 patch("lars.generation.posts.ask", return_value=Tweet(text="A new post")):
+            with patch("later.feed.profiles.profile_path", return_value=path), \
+                 patch("later.generation.posts.ask", return_value=Tweet(text="A new post")):
                 session = Session("demo")
                 try:
                     recommender = session.recommender

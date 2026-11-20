@@ -3,13 +3,13 @@
 import argparse
 from collections.abc import Callable
 
-from lars.feed.profiles import profile_path
+from later.feed.profiles import profile_path
 
 
 def main() -> None:
     """Terminal feed."""
     args = parse_args("Terminal feed")
-    from lars.session import Session
+    from later.session import Session
 
     session = Session(profile=args.profile)
     try:

@@ -5,7 +5,7 @@ from typing import NotRequired, TypedDict
 import numpy as np
 from scipy.special import betaincinv
 
-from lars.learning.bandit import FactoredBandit
+from later.learning.bandit import FactoredBandit
 
 type Counts = dict[str, dict[str, list[float]]]
 

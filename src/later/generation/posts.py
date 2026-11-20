@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 
-from lars.generation.llm import ask
-from lars.generation.text import strip_markdown
+from later.generation.llm import ask
+from later.generation.text import strip_markdown
 
 
 # Style starts model-proposed; the other dimensions start with these options.

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "lars-web",
+      "name": "later-web",
       "dependencies": {
         "ag-grid-community": "^36.3.0",
         "ag-grid-react": "^36.3.0",

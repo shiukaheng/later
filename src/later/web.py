@@ -8,12 +8,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Lock
 
-from lars.feed.synthetic import AuthorPool, engagement
-from lars.main import parse_args
+from later.feed.synthetic import AuthorPool, engagement
+from later.main import parse_args
 
-PORT = int(os.environ.get("LARS_PORT", 8000))
+PORT = int(os.environ.get("LATER_PORT", 8000))
 WEB_BUILD = Path(__file__).with_name("web_dist")
-log = logging.getLogger("lars.web")
+log = logging.getLogger("later.web")
 PAGES = {"/", "/dashboard", "/dashboard/"}
 
 
@@ -27,7 +27,7 @@ def ensure_frontend() -> Path:
         if not any(source.is_file() and source.stat().st_mtime_ns > index.stat().st_mtime_ns for source in sources):
             return index
     if not (frontend / "bun.lock").is_file():
-        raise SystemExit("Browser assets are missing. Run from a LARS source checkout or install a wheel with the frontend built.")
+        raise SystemExit("Browser assets are missing. Run from a LATER source checkout or install a wheel with the frontend built.")
     bun = shutil.which("bun")
     if bun is None:
         raise SystemExit("Install Bun (https://bun.com/) to build the browser frontend on first launch.")
@@ -45,10 +45,10 @@ def ensure_frontend() -> Path:
 def main() -> None:
     """Browser feed. Same backend (Session) as the terminal version."""
     args = parse_args("Browser feed", web=True)
-    from lars.session import Session
+    from later.session import Session
 
     logging.basicConfig(
-        level=os.environ.get("LARS_LOG", "INFO"),
+        level=os.environ.get("LATER_LOG", "INFO"),
         format="%(asctime)s %(levelname)-7s %(name)-9s %(message)s",
         datefmt="%H:%M:%S",
     )
@@ -142,7 +142,7 @@ def main() -> None:
             pass
 
     server = ThreadingHTTPServer((args.host, PORT), Handler)
-    log.info("LARS profile %s listening on %s:%d  (Ctrl-C to stop)", args.profile, args.host, PORT)
+    log.info("LATER profile %s listening on %s:%d  (Ctrl-C to stop)", args.profile, args.host, PORT)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

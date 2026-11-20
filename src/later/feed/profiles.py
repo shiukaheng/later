@@ -3,8 +3,8 @@ import re
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from lars.learning.bandit import FactoredBandit
-from lars.learning.posteriors import Checkpoint
+from later.learning.bandit import FactoredBandit
+from later.learning.posteriors import Checkpoint
 
 PATH = Path("data/session.json")
 

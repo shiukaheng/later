@@ -1,7 +1,7 @@
 [project]
-name = "lars"
+name = "later"
 version = "0.1.0"
-description = "Add your description here"
+description = "Language Arms for Thompson-based Evolving Recommendation"
 readme = "README.md"
 authors = [
     { name = "Heng", email = "31088159+shiukaheng@users.noreply.github.com" }
@@ -18,8 +18,8 @@ dependencies = [
 ]
 
 [project.scripts]
-lars = "lars.main:main"
-lars-web = "lars.web:main"
+later = "later.main:main"
+later-web = "later.web:main"
 
 [build-system]
 requires = ["uv_build>=0.9.7,<0.10.0"]

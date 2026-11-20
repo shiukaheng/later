@@ -9,16 +9,16 @@ from openai import OpenAI
 from pydantic import BaseModel
 
 # OpenAI-compatible endpoint. Point OPENAI_BASE_URL at any local server.
-MODEL = os.environ.get("LARS_MODEL", "gpt-4o-mini")
-TEMPERATURE = float(os.environ.get("LARS_TEMPERATURE", 1.2))
-# LARS_NO_THINK=1 disables reasoning on Qwen-style local models (~20x faster).
-EXTRA = {"chat_template_kwargs": {"enable_thinking": False}} if os.environ.get("LARS_NO_THINK") == "1" else None
-log = logging.getLogger("lars.llm")
+MODEL = os.environ.get("LATER_MODEL", "gpt-4o-mini")
+TEMPERATURE = float(os.environ.get("LATER_TEMPERATURE", 1.2))
+# LATER_NO_THINK=1 disables reasoning on Qwen-style local models (~20x faster).
+EXTRA = {"chat_template_kwargs": {"enable_thinking": False}} if os.environ.get("LATER_NO_THINK") == "1" else None
+log = logging.getLogger("later.llm")
 
 
 @cache
 def client() -> OpenAI:
-    return OpenAI(timeout=float(os.environ.get("LARS_LLM_TIMEOUT", 60)), max_retries=1)
+    return OpenAI(timeout=float(os.environ.get("LATER_LLM_TIMEOUT", 60)), max_retries=1)
 
 
 def ask[T: BaseModel](prompt: str, schema: type[T], temperature: float = TEMPERATURE) -> T:

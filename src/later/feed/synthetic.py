@@ -17,9 +17,9 @@ from faker import Faker
 from unidecode import unidecode
 
 AUTHOR_PATH = Path("data/authors.json")
-AUTHOR_COUNT = int(os.environ.get("LARS_AUTHORS", 500))
+AUTHOR_COUNT = int(os.environ.get("LATER_AUTHORS", 500))
 RECENT_AUTHORS = 20
-log = logging.getLogger("lars.authors")
+log = logging.getLogger("later.authors")
 
 
 class AuthorPool:
@@ -159,7 +159,7 @@ def display_name(first: str, last: str, native: str, locale: str, gender: str) -
 
 def gravatar(seed: str) -> str:
     style = random.choices(list(AVATAR_STYLES), list(AVATAR_STYLES.values()))[0]
-    digest = hashlib.sha256(f"{seed}@lars.invalid".encode()).hexdigest()
+    digest = hashlib.sha256(f"{seed}@later.invalid".encode()).hexdigest()
     return f"https://gravatar.com/avatar/{digest}?d={style}&s=96"
 
 

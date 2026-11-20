@@ -2,10 +2,10 @@ import unittest
 from concurrent.futures import Future
 from unittest.mock import patch
 
-from lars.learning.bandit import FactoredBandit, ThompsonBandit
-from lars.learning.evolve import Level, propose_level
-from lars.learning.recommender import Recommendation, Recommender
-from lars.session import MAX_RETRIES, Session
+from later.learning.bandit import FactoredBandit, ThompsonBandit
+from later.learning.evolve import Level, propose_level
+from later.learning.recommender import Recommendation, Recommender
+from later.session import MAX_RETRIES, Session
 
 
 class DeduplicationTests(unittest.TestCase):
@@ -26,7 +26,7 @@ class DeduplicationTests(unittest.TestCase):
     def test_proposal_retries_duplicates_and_rejects_retired(self):
         b = ThompsonBandit(["tech and AI", "sports"])
         responses = [Level(level="Tech and AI."), Level(level="food"), Level(level="science")]
-        with patch("lars.learning.evolve.ask", side_effect=responses) as ask:
+        with patch("later.learning.evolve.ask", side_effect=responses) as ask:
             result = propose_level(b, "topic", [], ["food"], "feed")
         self.assertEqual(result, "science")
         self.assertEqual(ask.call_count, 3)
