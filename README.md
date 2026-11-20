@@ -1,4 +1,4 @@
-# LATER (Language Arms for Thompson-based Evolving Recommendation)
+# LATER: Language Arms for Thompson-based Evolving Recommendation
 
 <img src="feed-preview.png" alt="Light-mode LATER For You feed on a gray background, showing six generated tweets" width="560">
 
